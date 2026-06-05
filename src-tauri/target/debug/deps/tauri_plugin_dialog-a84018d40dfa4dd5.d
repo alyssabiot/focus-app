@@ -1,0 +1,10 @@
+/Users/alyssa/code/focus-app/src-tauri/target/debug/deps/tauri_plugin_dialog-a84018d40dfa4dd5.d: /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/lib.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/desktop.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/commands.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/error.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/models.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/init-iife.js
+
+/Users/alyssa/code/focus-app/src-tauri/target/debug/deps/libtauri_plugin_dialog-a84018d40dfa4dd5.rmeta: /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/lib.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/desktop.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/commands.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/error.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/models.rs /Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/init-iife.js
+
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/lib.rs:
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/desktop.rs:
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/commands.rs:
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/error.rs:
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/models.rs:
+/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-dialog-2.7.1/src/init-iife.js:

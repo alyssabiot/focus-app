@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus — Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,400;0,500;1,400&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --paper:#f4eee1; --paper-2:#ece3d2; --card:#faf6ee;
+  --ink:#2b2620; --ink-soft:#6c6356; --ink-faint:#9b9183;
+  --rule:#ded3c1; --rule-strong:#c9bda6;
+  --accent:#4f6b50;
+  --accent-ink:color-mix(in oklab, var(--accent) 78%, #18120a);
+  --accent-soft:color-mix(in oklab, var(--accent) 13%, var(--card));
+  --accent-paper:#eef2ea;
+  --prio-high:#bb4a2a; --prio-med:#ad832e; --prio-low:#4f6b50;
+  --st-todo:#a4492a; --st-prog:#9a7a2a; --st-done:#4f6b50;
+  --st-review:#3c577c; --st-qa:#7a4f6b;
+  --serif:'Spectral', Georgia, 'Times New Roman', serif;
+  --mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+  --sans:'Spline Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --shadow:0 1px 2px rgba(45,32,15,.05), 0 10px 26px -12px rgba(45,32,15,.16);
+}
+
+html,body{min-height:100%}
+body{
+  font-family:var(--sans); color:var(--ink); line-height:1.45;
+  background:
+    radial-gradient(135% 90% at 50% -20%, #d8c8ae 0%, transparent 55%),
+    linear-gradient(158deg, #cab896 0%, #b8a583 60%, #ab9776 100%);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+/* La barre de titre sert à déplacer la fenêtre — pas de sélection de texte dessus. */
+.titlebar{user-select:none;-webkit-user-select:none}
+::selection{background:var(--accent);color:#fbf3ea}
+
+/* ---------- macOS window ---------- */
+.desktop{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:26px 22px 40px}
+.window{
+  width:100%;max-width:1240px;background:var(--paper);border-radius:13px;overflow:hidden;
+  box-shadow:0 0 0 .5px rgba(60,45,25,.22), 0 36px 80px -26px rgba(38,26,10,.6), 0 14px 30px -14px rgba(38,26,10,.4);
+}
+.titlebar{
+  height:42px;display:flex;align-items:center;gap:14px;padding:0 16px;
+  background:linear-gradient(180deg, color-mix(in oklab,var(--paper-2) 70%, #fff), var(--paper-2));
+  border-bottom:1px solid var(--rule);
+  -webkit-app-region:drag;
+}
+.lights{display:flex;gap:8px;-webkit-app-region:no-drag}
+.light{width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.18);
+  cursor:pointer;border:none;padding:0;position:relative}
+.light.red{background:#ff5f57}.light.yellow{background:#febc2e}.light.green{background:#28c840}
+.light i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:rgba(0,0,0,.5);opacity:0;transition:.12s}
+.lights:hover .light i{opacity:1}
+.win-title{flex:1;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-soft)}
+.win-title b{font-weight:500;color:var(--ink)}
+.win-spacer{width:52px}
+.winbody{padding:26px 30px 32px}
+
+/* ---------- masthead ---------- */
+.appbar{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+  padding-bottom:18px;margin-bottom:24px;border-bottom:1px solid var(--rule-strong);position:relative}
+.appbar::after{content:'';position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--rule)}
+.brand{display:flex;flex-direction:column;gap:7px}
+.brand .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-faint)}
+.brand h1{font-family:var(--serif);font-weight:500;font-size:38px;letter-spacing:-.015em;line-height:1;white-space:nowrap}
+.brand h1 em{font-style:italic;color:var(--accent-ink)}
+.meta{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);margin-top:2px;white-space:nowrap}
+.meta .sep{color:var(--ink-faint)}
+.meta #clock{color:var(--ink);letter-spacing:.04em}
+.actions{display:flex;gap:10px}
+
+.btn{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--ink);background:var(--card);
+  border:1px solid var(--rule-strong);border-radius:9px;padding:9px 15px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;line-height:1;transition:.15s}
+.btn:hover{border-color:var(--ink-soft);background:color-mix(in oklab,var(--card) 60%,var(--paper))}
+.btn i{font-size:16px;color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent-ink);color:#fbf3ea}
+.btn-primary:hover{background:var(--accent-ink)}
+.btn-primary i{color:#f3d6c5}
+.icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--rule-strong);background:var(--card);
+  color:var(--ink-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;transition:.15s;padding:0}
+.icon-btn:hover{border-color:var(--ink-soft);color:var(--ink)}
+
+/* ---------- grid + panels ---------- */
+.grid{display:grid;grid-template-columns:1.08fr 1.08fr 1fr;gap:22px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:20px 20px 18px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:15px;min-width:0}
+.panel.span2{grid-column:span 2}
+
+.p-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding-bottom:13px;border-bottom:1px solid var(--rule)}
+.p-titles{display:flex;flex-direction:column;gap:6px;min-width:0}
+.p-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap}
+.p-eyebrow b{color:var(--accent-ink);font-weight:500}
+.p-title{font-family:var(--serif);font-size:22px;font-weight:500;line-height:1;letter-spacing:-.01em}
+.p-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+
+.chip{font-family:var(--mono);font-size:11px;color:var(--ink-soft);background:var(--paper);
+  border:1px solid var(--rule);border-radius:20px;padding:4px 10px;white-space:nowrap}
+.chip.ok{color:var(--st-done);border-color:color-mix(in oklab,var(--st-done) 30%,var(--paper))}
+.chip.warn{color:var(--accent-ink);border-color:color-mix(in oklab,var(--accent) 30%,var(--paper))}
+
+.count-set{display:flex;gap:5px}
+.count{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid;display:inline-flex;gap:5px;align-items:center}
+.count.todo{color:var(--st-todo);border-color:color-mix(in oklab,var(--st-todo) 28%,var(--paper));background:color-mix(in oklab,var(--st-todo) 7%,var(--card))}
+.count.prog{color:var(--st-prog);border-color:color-mix(in oklab,var(--st-prog) 28%,var(--paper));background:color-mix(in oklab,var(--st-prog) 7%,var(--card))}
+.count.done{color:var(--st-done);border-color:color-mix(in oklab,var(--st-done) 28%,var(--paper));background:color-mix(in oklab,var(--st-done) 7%,var(--card))}
+.count.review{color:var(--st-review);border-color:color-mix(in oklab,var(--st-review) 28%,var(--paper));background:color-mix(in oklab,var(--st-review) 7%,var(--card))}
+.count.qa{color:var(--st-qa);border-color:color-mix(in oklab,var(--st-qa) 28%,var(--paper));background:color-mix(in oklab,var(--st-qa) 7%,var(--card))}
+
+/* ---------- list / scroll ---------- */
+.list{display:flex;flex-direction:column;overflow-y:auto;max-height:236px;margin:-2px 0}
+.list::-webkit-scrollbar{width:4px}
+.list::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:4px}
+
+.event{display:flex;gap:14px;padding:12px 2px;border-bottom:1px solid var(--rule);align-items:baseline}
+.event:last-child{border-bottom:none}
+.ev-date{font-family:var(--mono);font-size:11px;color:var(--accent-ink);min-width:54px;text-transform:uppercase;letter-spacing:.04em;flex:0 0 auto}
+.ev-main{flex:1;min-width:0}
+.ev-title{font-size:14px;color:var(--ink);line-height:1.3}
+.ev-time{font-family:var(--mono);font-size:11px;color:var(--ink-soft);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ev-cal{display:inline-flex;align-items:center;gap:5px;color:var(--ink-soft);white-space:nowrap}
+.ev-cal::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--cal,var(--ink-faint));flex:0 0 auto}
+
+/* ---------- tickets ---------- */
+.tabs{display:flex;gap:15px;border-bottom:1px solid var(--rule)}
+.tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;flex:0 0 auto;
+  background:none;border:none;padding:0 0 10px;cursor:pointer;position:relative;transition:.15s}
+.tab:hover{color:var(--ink-soft)}
+.tab.active{color:var(--ink)}
+.tab.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
+.ticket{padding:12px 2px;border-bottom:1px solid var(--rule)}
+.ticket:last-child{border-bottom:none}
+.tk-title{font-size:14px;line-height:1.3}
+.tk-ref{font-family:var(--mono);font-size:11px;color:var(--ink-faint);white-space:nowrap}
+.tk-meta{display:flex;gap:10px;align-items:center;margin-top:7px;font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid;white-space:nowrap}
+.badge.todo{color:var(--st-todo);border-color:color-mix(in oklab,var(--st-todo) 32%,var(--paper));background:color-mix(in oklab,var(--st-todo) 8%,var(--card))}
+.badge.prog{color:var(--st-prog);border-color:color-mix(in oklab,var(--st-prog) 32%,var(--paper));background:color-mix(in oklab,var(--st-prog) 8%,var(--card))}
+.badge.done{color:var(--st-done);border-color:color-mix(in oklab,var(--st-done) 32%,var(--paper));background:color-mix(in oklab,var(--st-done) 8%,var(--card))}
+.badge.review{color:var(--st-review);border-color:color-mix(in oklab,var(--st-review) 32%,var(--paper));background:color-mix(in oklab,var(--st-review) 8%,var(--card))}
+.badge.qa{color:var(--st-qa);border-color:color-mix(in oklab,var(--st-qa) 32%,var(--paper));background:color-mix(in oklab,var(--st-qa) 8%,var(--card))}
+
+/* ---------- todo ---------- */
+.add{display:flex;gap:9px;align-items:stretch}
+.input{font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule-strong);border-radius:9px;padding:9px 12px;flex:1;min-width:0;transition:.15s}
+.input:focus{outline:none;border-color:var(--accent)}
+.input::placeholder{color:var(--ink-faint)}
+.select{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule-strong);border-radius:9px;padding:0 8px;cursor:pointer}
+.select:focus{outline:none;border-color:var(--accent)}
+.todo{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--rule)}
+.todo:last-child{border-bottom:none}
+.check{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rule-strong);cursor:pointer;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;transition:.15s;background:var(--paper)}
+.check.done{background:var(--accent);border-color:var(--accent)}
+.check.done::after{content:'\2713';color:#fbf3ea;font-size:12px;line-height:1}
+.prio-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.prio-dot.high{background:var(--prio-high)}.prio-dot.med{background:var(--prio-med)}.prio-dot.low{background:var(--prio-low)}
+.todo-text{flex:1;font-size:14px;cursor:pointer;line-height:1.3;min-width:0}
+.todo-text.done{text-decoration:line-through;text-decoration-color:var(--ink-faint);color:var(--ink-faint)}
+.todo-del{opacity:0;background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;transition:.15s;display:flex;padding:2px}
+.todo:hover .todo-del{opacity:1}
+.todo-del:hover{color:var(--accent)}
+
+/* ---------- pomodoro ---------- */
+.pomo{display:flex;flex-direction:column;align-items:center;gap:16px;padding:6px 0 2px}
+.ring{width:148px;height:148px;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .track{fill:none;stroke:var(--rule);stroke-width:5}
+.ring .prog{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round;
+  stroke-dasharray:326;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear, stroke .3s}
+.ring-time{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:31px;font-weight:500;letter-spacing:.01em;color:var(--ink)}
+.pomo-mode{font-family:var(--serif);font-style:italic;font-size:18px;color:var(--ink-soft)}
+.pomo-btns{display:flex;gap:8px;align-items:center}
+.ledger{display:grid;grid-template-columns:repeat(3,1fr);width:100%;border:1px solid var(--rule);
+  border-radius:9px;overflow:hidden;background:var(--paper)}
+.ledger .cell{padding:11px 6px;text-align:center;border-right:1px solid var(--rule)}
+.ledger .cell:last-child{border-right:none}
+.cell .num{font-family:var(--mono);font-size:22px;color:var(--ink)}
+.cell .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-top:4px}
+
+/* ---------- notes ---------- */
+.notes{font-family:var(--sans);font-size:14px;line-height:28px;color:var(--ink);background:var(--card);
+  border:1px solid var(--rule);border-radius:9px;padding:12px 15px;resize:none;flex:1;min-height:172px;transition:border-color .15s}
+.notes:focus{outline:none;border-color:var(--accent)}
+.notes::placeholder{color:var(--ink-faint)}
+.notes-foot{font-family:var(--mono);font-size:11px;color:var(--ink-faint);display:flex;align-items:center;gap:6px;min-height:14px}
+
+/* ---------- empty ---------- */
+.empty{padding:30px 12px;text-align:center;color:var(--ink-faint);font-family:var(--mono);font-size:12px;
+  display:flex;flex-direction:column;align-items:center;gap:11px;line-height:1.5}
+.empty i{font-size:26px;opacity:.55}
+.empty.err{color:var(--accent-ink)}
+
+/* ---------- modal ---------- */
+.overlay{display:none;position:fixed;inset:0;background:rgba(40,28,14,.42);backdrop-filter:blur(3px);
+  z-index:100;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--rule-strong);border-radius:14px;padding:26px 26px 22px;
+  width:100%;max-width:460px;box-shadow:0 36px 70px -24px rgba(40,28,12,.55)}
+.modal h3{font-family:var(--serif);font-size:24px;font-weight:500;line-height:1}
+.modal .modal-sub{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-faint);margin:7px 0 20px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.field a{color:var(--accent-ink)}
+.btn-add{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--accent-ink);background:none;border:none;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:8px 0 0;transition:.15s}
+.btn-add i{font-size:14px}
+.btn-add:hover{color:var(--ink)}
+.gaccounts{display:flex;flex-direction:column;gap:10px}
+.gaccount{border:1px solid var(--rule);border-radius:9px;background:var(--paper);padding:11px 12px}
+.gaccount-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--ink)}
+.gaccount-head .acc-dot{width:8px;height:8px;border-radius:50%;background:var(--acc,var(--ink-faint));flex:0 0 auto}
+.gaccount-head .acc-mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gaccount-head .acc-x{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;display:flex;padding:2px;transition:.15s}
+.gaccount-head .acc-x:hover{color:var(--accent)}
+.acc-reauth{font-family:var(--mono);font-size:10px;color:var(--accent-ink);background:none;border:1px solid color-mix(in oklab,var(--accent) 30%,var(--paper));
+  border-radius:5px;padding:3px 7px;cursor:pointer;white-space:nowrap}
+.acc-reauth:hover{border-color:var(--accent)}
+.gaccount-cals{display:flex;flex-direction:column;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--rule)}
+.gaccount-cals label{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;color:var(--ink-soft);cursor:pointer}
+.gaccount-cals input{accent-color:var(--accent);cursor:pointer}
+.gaccount-empty{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:8px}
+.note-box{font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--ink-soft);background:var(--paper);
+  border:1px solid var(--rule);border-radius:8px;padding:11px 13px;display:flex;gap:9px;align-items:flex-start;margin-top:4px}
+.note-box i{color:var(--ink-faint);font-size:15px;margin-top:1px;flex:0 0 auto}
+.note-box code{background:var(--paper-2);border-radius:3px;padding:1px 4px}
+.modal-btns{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;bottom:26px;right:26px;background:var(--card);border:1px solid var(--rule-strong);
+  border-left:3px solid var(--accent);border-radius:8px;padding:12px 16px;font-family:var(--sans);font-size:13px;color:var(--ink);
+  box-shadow:0 16px 36px -14px rgba(40,28,12,.5);z-index:200;opacity:0;transform:translateY(10px);transition:.25s;max-width:300px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.err{border-left-color:var(--prio-high)}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.spinning{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:1080px){.grid{grid-template-columns:1fr 1fr}.panel.span2{grid-column:span 2}.brand h1{font-size:32px}}
+@media(max-width:720px){.winbody{padding:20px 18px 24px}.grid{grid-template-columns:1fr}.panel.span2{grid-column:span 1}
+  .appbar{flex-direction:column;align-items:flex-start;gap:16px}}
+</style>
+</head>
+<body>
+
+<h2 class="sr-only">Focus — agenda Google, tickets Notion, to-do, pomodoro et notes rapides</h2>
+
+<div class="desktop">
+  <div class="window">
+
+    <div class="titlebar">
+      <div class="lights">
+        <button class="light red" onclick="winClose()" aria-label="Fermer"><i class="ti ti-x" aria-hidden="true"></i></button>
+        <button class="light yellow" onclick="winMinimize()" aria-label="Réduire"><i class="ti ti-minus" aria-hidden="true"></i></button>
+        <button class="light green" onclick="winMaximize()" aria-label="Plein écran"><i class="ti ti-arrows-maximize" aria-hidden="true"></i></button>
+      </div>
+      <div class="win-title"><b>Focus</b> — Planner</div>
+      <div class="win-spacer"></div>
+    </div>
+
+    <div class="winbody">
+
+      <header class="appbar">
+        <div class="brand">
+          <div class="eyebrow">Votre journée, au calme</div>
+          <h1>Focus <em>Planner</em></h1>
+          <div class="meta"><span id="date-chip">—</span><span class="sep">·</span><span id="clock">—</span></div>
+        </div>
+        <div class="actions">
+          <button class="btn" onclick="exportData()"><i class="ti ti-download" aria-hidden="true"></i> Exporter</button>
+          <button class="btn btn-primary" onclick="openSettings()"><i class="ti ti-plug" aria-hidden="true"></i> Connecter</button>
+        </div>
+      </header>
+
+      <main class="grid" id="main-grid">
+
+        <!-- Agenda -->
+        <section class="panel" id="cal-panel">
+          <div class="p-head">
+            <div class="p-titles">
+              <div class="p-eyebrow">Agenda <b>·</b> Google</div>
+              <div class="p-title">Cette semaine</div>
+            </div>
+            <div class="p-tools">
+              <span class="chip" id="cal-status">Non connecté</span>
+              <button class="icon-btn" onclick="fetchCalendar(true)" aria-label="Rafraîchir"><i class="ti ti-refresh" id="cal-refresh" aria-hidden="true"></i></button>
+            </div>
+          </div>
+          <div class="list" id="events-list">
+            <div class="empty">
+              <i class="ti ti-calendar-plus" aria-hidden="true"></i>
+              Connectez votre clé<br>Google Calendar
+            </div>
+          </div>
+        </section>
+
+        <!-- Notion -->
+        <section class="panel" id="notion-panel">
+          <div class="p-head">
+            <div class="p-titles">
+              <div class="p-eyebrow">Tickets <b>·</b> Notion</div>
+              <div class="p-title">À traiter</div>
+            </div>
+            <div class="p-tools"><div class="count-set" id="notion-stats"></div></div>
+          </div>
+          <div class="tabs" id="notion-filter">
+            <button class="tab active" onclick="filterTickets('in-progress',this)">En cours</button>
+            <button class="tab" onclick="filterTickets('review',this)">En review</button>
+            <button class="tab" onclick="filterTickets('qa',this)">En QA</button>
+          </div>
+          <div class="list" id="tickets-list">
+            <div class="empty">
+              <i class="ti ti-layout-kanban" aria-hidden="true"></i>
+              Reliez votre base<br>de données Notion
+            </div>
+          </div>
+        </section>
+
+        <!-- To-do -->
+        <section class="panel">
+          <div class="p-head">
+            <div class="p-titles">
+              <div class="p-eyebrow">Liste <b>·</b> Locale</div>
+              <div class="p-title">À faire</div>
+            </div>
+            <div class="p-tools"><span class="chip" id="todo-count">0 tâche</span></div>
+          </div>
+          <div class="add">
+            <input class="input" id="todo-input" placeholder="Nouvelle tâche…" onkeydown="if(event.key==='Enter')addTodo()">
+            <select class="select" id="todo-prio" aria-label="Priorité">
+              <option value="high">Haute</option>
+              <option value="med" selected>Moyenne</option>
+              <option value="low">Basse</option>
+            </select>
+            <button class="icon-btn" onclick="addTodo()" aria-label="Ajouter"><i class="ti ti-plus" aria-hidden="true"></i></button>
+          </div>
+          <div class="list" id="todo-list"></div>
+        </section>
+
+        <!-- Pomodoro -->
+        <section class="panel">
+          <div class="p-head">
+            <div class="p-titles">
+              <div class="p-eyebrow">Minuteur <b>·</b> Focus</div>
+              <div class="p-title">Pomodoro</div>
+            </div>
+            <div class="p-tools"><span class="chip" id="pomo-session-count">0 sessions</span></div>
+          </div>
+          <div class="pomo">
+            <div class="ring">
+              <svg viewBox="0 0 110 110">
+                <circle class="track" cx="55" cy="55" r="52"></circle>
+                <circle class="prog" id="pomo-ring" cx="55" cy="55" r="52"></circle>
+              </svg>
+              <div class="ring-time" id="pomo-display">25:00</div>
+            </div>
+            <div class="pomo-mode" id="pomo-mode-label">Concentration</div>
+            <div class="pomo-btns">
+              <button class="icon-btn" onclick="pomoPrev()" aria-label="Mode précédent"><i class="ti ti-player-skip-back" aria-hidden="true"></i></button>
+              <button class="btn btn-primary" id="pomo-btn" onclick="togglePomo()"><i class="ti ti-player-play" aria-hidden="true"></i> Démarrer</button>
+              <button class="icon-btn" onclick="resetPomo()" aria-label="Réinitialiser"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+            </div>
+            <div class="ledger">
+              <div class="cell"><div class="num" id="pomo-today">0</div><div class="lbl">Aujourd'hui</div></div>
+              <div class="cell"><div class="num" id="pomo-total">0</div><div class="lbl">Total</div></div>
+              <div class="cell"><div class="num" id="pomo-mins">0</div><div class="lbl">Minutes</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Notes -->
+        <section class="panel span2">
+          <div class="p-head">
+            <div class="p-titles">
+              <div class="p-eyebrow">Brouillon <b>·</b> Local</div>
+              <div class="p-title">Notes rapides</div>
+            </div>
+            <div class="p-tools">
+              <button class="icon-btn" onclick="clearNotes()" aria-label="Effacer"><i class="ti ti-trash" aria-hidden="true"></i></button>
+              <button class="btn" onclick="saveNotes()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Enregistrer</button>
+            </div>
+          </div>
+          <textarea class="notes" id="notes" placeholder="Posez vos idées ici…  (⌘/Ctrl + S pour enregistrer)"></textarea>
+          <div class="notes-foot" id="notes-saved"></div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="overlay" id="settings-modal">
+  <div class="modal">
+    <h3>Connexions</h3>
+    <div class="modal-sub">Agenda Google &amp; base de données Notion</div>
+    <div class="field">
+      <label>Google — Identifiants OAuth (app de bureau)</label>
+      <input class="input" id="goauth-client-id" placeholder="Client ID  ·  …apps.googleusercontent.com">
+      <input class="input" id="goauth-client-secret" placeholder="Client secret  ·  GOCSPX-…" style="margin-top:8px">
+    </div>
+    <div class="field">
+      <label>Comptes Google connectés</label>
+      <div class="gaccounts" id="gaccounts"></div>
+      <button type="button" class="btn-add" onclick="connectGoogle()"><i class="ti ti-plus" aria-hidden="true"></i> Connecter un compte Google</button>
+    </div>
+    <div class="field">
+      <label>Notion — Token d'intégration</label>
+      <input class="input" id="notion-token" placeholder="secret_…">
+    </div>
+    <div class="field">
+      <label>Notion — ID de la base de données</label>
+      <input class="input" id="notion-db" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+    <div class="field">
+      <label>Notion — Filtrer par personne assignée (nom ou ID, optionnel)</label>
+      <input class="input" id="notion-assignee" placeholder="Alyssa Biot  ·  ou un ID utilisateur Notion  ·  vide = tous">
+    </div>
+    <div class="note-box">
+      <i class="ti ti-lock" aria-hidden="true"></i>
+      <span>Vos clés sont stockées uniquement en local dans <code>~/.focus-app/</code> sur votre Mac. Elles ne sont jamais transmises à un tiers.</span>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeSettings()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveSettings()"><i class="ti ti-check" aria-hidden="true"></i> Connecter</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="notif"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

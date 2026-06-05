@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Accès réseau sortant (Google Calendar, Notion API) -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Accès au répertoire utilisateur (~/.focus-app/) -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <!-- Notifications utilisateur -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+</dict>
+</plist>

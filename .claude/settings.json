@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '\\\\.\\(png|icns|ico\\)$')",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(find /tmp/focus-design -type f | head -50)",
+      "Read(//private/tmp/focus-design/**)",
+      "Read(//tmp/focus-design/focus-app/**)",
+      "Read(//private/tmp/focus-design/focus-app/**)",
+      "Bash(ls -la capabilities/)",
+      "Bash(cat capabilities/*.json)",
+      "Bash(grep -ri \"withGlobalTauri\" . --include=*.json)",
+      "Bash(rm -rf /tmp/focus-design2)",
+      "Bash(mkdir -p /tmp/focus-design2)",
+      "Bash(tar -xzf webfetch-1780655250578-vlfwg4.bin -C /tmp/focus-design2)",
+      "Read(//tmp/**)",
+      "Bash(node --check main.js)",
+      "Bash(rustup run *)"
+    ]
+  }
+}
