@@ -34,20 +34,17 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
   background-attachment:fixed;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 ::selection{background:var(--peach);color:#fff}
 
-.desktop{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:28px 24px 48px}
-.window{width:100%;max-width:1240px;background:var(--bg);border-radius:22px;overflow:hidden;
-  box-shadow:0 0 0 .5px rgba(60,50,40,.08), 0 40px 90px -34px rgba(60,45,35,.4), 0 14px 30px -16px rgba(60,45,35,.25);}
-.titlebar{height:46px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#fff;border-bottom:1px solid var(--rule);
-  user-select:none;-webkit-user-select:none;-webkit-app-region:drag;}
-.lights{display:flex;gap:8px;-webkit-app-region:no-drag}
-.light{width:12px;height:12px;border-radius:50%;border:none;padding:0;cursor:pointer;position:relative}
-.light.red{background:#ff5f57}.light.yellow{background:#febc2e}.light.green{background:#28c840}
-.light i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(0,0,0,.5);opacity:0;transition:.12s}
-.lights:hover .light i{opacity:1}
-.win-title{flex:1;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-soft)}
-.win-title b{font-weight:500;color:var(--ink)}
-.win-spacer{width:52px}
-.winbody{padding:30px 34px 38px}
+/* Fenêtre macOS native (coins + feux fournis par l'OS via titleBarStyle Overlay).
+   Barre haute fixe et OPAQUE derrière les feux : le contenu scrolle dessous sans transparaître.
+   Même dégradé que le fond (fixé au viewport) → raccord invisible au repos. */
+.drag-strip{position:fixed;top:0;left:0;right:0;height:40px;z-index:50;cursor:default;
+  background:
+    radial-gradient(90% 70% at 12% 0%, #fbe6d6 0%, transparent 45%),
+    radial-gradient(80% 70% at 100% 8%, #eae2f7 0%, transparent 45%),
+    radial-gradient(90% 80% at 80% 100%, #e2f2ea 0%, transparent 45%),
+    var(--bg);
+  background-attachment:fixed;}
+.winbody{max-width:1320px;margin:0 auto;padding:40px 32px 40px}
 
 /* masthead */
 .appbar{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}
@@ -69,7 +66,7 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 .btn-primary i{color:#fde6d8}
 
 /* grid */
-.grid{display:grid;grid-template-columns:1.08fr 1.08fr 1fr;gap:20px;align-items:start}
+.grid{display:grid;grid-template-columns:1.08fr 1.08fr 1fr;gap:20px;align-items:stretch}
 .panel{border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px;min-width:0;position:relative;border:1.5px solid #fff;}
 .panel.span2{grid-column:span 2}
 .p-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -110,8 +107,10 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 
 /* tabs + tickets */
 .tabs{display:flex;gap:7px;flex-wrap:wrap}
-.tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--lav-ink);background:#fff;padding:7px 12px;border-radius:20px;cursor:pointer;font-weight:500;white-space:nowrap;border:none}
-.tab.active{background:var(--lav-ink);color:#fff}
+.tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);background:#fff;padding:7px 12px;border-radius:20px;cursor:pointer;font-weight:500;white-space:nowrap;border:none}
+.tab.prog{color:var(--sky-ink)} .tab.review{color:var(--lav-ink)} .tab.qa{color:var(--peach-ink)}
+.tab.active{color:#fff}
+.tab.active.prog{background:var(--sky-ink)} .tab.active.review{background:var(--lav-ink)} .tab.active.qa{background:var(--peach-ink)}
 .ticket{padding:15px;background:#fff;border-radius:16px}
 .tk-title{font-size:14px;color:var(--ink);line-height:1.4;display:flex;gap:9px;align-items:flex-start}
 .tk-title .key{font-family:var(--mono);font-size:11px;color:var(--ink-faint);white-space:nowrap}
@@ -220,18 +219,7 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 
 <h2 class="sr-only">Focus — agenda Google, tickets Notion, to-do, pomodoro et notes rapides</h2>
 
-<div class="desktop">
-  <div class="window">
-
-    <div class="titlebar">
-      <div class="lights">
-        <button class="light red" onclick="winClose()" aria-label="Fermer"><i class="ti ti-x" aria-hidden="true"></i></button>
-        <button class="light yellow" onclick="winMinimize()" aria-label="Réduire"><i class="ti ti-minus" aria-hidden="true"></i></button>
-        <button class="light green" onclick="winMaximize()" aria-label="Plein écran"><i class="ti ti-arrows-maximize" aria-hidden="true"></i></button>
-      </div>
-      <div class="win-title">Focus <b>— Planner</b></div>
-      <div class="win-spacer"></div>
-    </div>
+<div class="drag-strip"></div>
 
     <div class="winbody">
 
@@ -245,8 +233,8 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
           </div>
         </div>
         <div class="actions">
-          <button class="btn" onclick="exportData()"><i class="ti ti-download" aria-hidden="true"></i> Exporter</button>
-          <button class="btn btn-primary" onclick="openSettings()"><i class="ti ti-plug" aria-hidden="true"></i> Connecter</button>
+          <button class="btn" data-action="export"><i class="ti ti-download" aria-hidden="true"></i> Exporter</button>
+          <button class="btn btn-primary" data-action="open-settings"><i class="ti ti-plug" aria-hidden="true"></i> Connecter</button>
         </div>
       </header>
 
@@ -261,7 +249,7 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
             </div>
             <div class="p-tools">
               <span class="chip" id="cal-status">Non connecté</span>
-              <button class="icon-btn" onclick="fetchCalendar(true)" aria-label="Rafraîchir"><i class="ti ti-refresh" id="cal-refresh" aria-hidden="true"></i></button>
+              <button class="icon-btn" data-action="cal-refresh" aria-label="Rafraîchir"><i class="ti ti-refresh" id="cal-refresh" aria-hidden="true"></i></button>
             </div>
           </div>
           <div class="list" id="events-list">
@@ -279,9 +267,9 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
             <div class="p-tools"><div class="count-set" id="notion-stats"></div></div>
           </div>
           <div class="tabs" id="notion-filter">
-            <button class="tab active" onclick="filterTickets('in-progress',this)">En cours</button>
-            <button class="tab" onclick="filterTickets('review',this)">En review</button>
-            <button class="tab" onclick="filterTickets('qa',this)">En QA</button>
+            <button class="tab prog active" data-action="filter" data-filter="in-progress">En cours</button>
+            <button class="tab review" data-action="filter" data-filter="review">En review</button>
+            <button class="tab qa" data-action="filter" data-filter="qa">En QA</button>
           </div>
           <div class="list" id="tickets-list">
             <div class="empty"><div class="e-ico"><i class="ti ti-layout-kanban" aria-hidden="true"></i></div><p>Reliez votre base Notion</p></div>
@@ -298,13 +286,13 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
             <div class="p-tools"><span class="chip" id="todo-count">0 tâche</span></div>
           </div>
           <div class="todo-add">
-            <input id="todo-input" placeholder="Nouvelle tâche…" onkeydown="if(event.key==='Enter')addTodo()">
+            <input id="todo-input" placeholder="Nouvelle tâche…">
             <select id="todo-prio" aria-label="Priorité">
               <option value="high">Haute</option>
               <option value="med" selected>Moyenne</option>
               <option value="low">Basse</option>
             </select>
-            <button class="icon-btn" onclick="addTodo()" aria-label="Ajouter"><i class="ti ti-plus" aria-hidden="true"></i></button>
+            <button class="icon-btn" data-action="add-todo" aria-label="Ajouter"><i class="ti ti-plus" aria-hidden="true"></i></button>
           </div>
           <div class="list" id="todo-list"></div>
         </section>
@@ -327,9 +315,9 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
               <div class="ring-time"><div class="t" id="pomo-display">25:00</div><div class="m" id="pomo-mode-label">Concentration</div></div>
             </div>
             <div class="pomo-ctrl">
-              <button class="icon-btn" onclick="pomoPrev()" aria-label="Mode précédent"><i class="ti ti-player-skip-back" aria-hidden="true"></i></button>
-              <button class="play" id="pomo-btn" onclick="togglePomo()"><i class="ti ti-player-play" aria-hidden="true"></i> Démarrer</button>
-              <button class="icon-btn" onclick="resetPomo()" aria-label="Réinitialiser"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+              <button class="icon-btn" data-action="pomo-prev" aria-label="Mode précédent"><i class="ti ti-player-skip-back" aria-hidden="true"></i></button>
+              <button class="play" id="pomo-btn" data-action="pomo-toggle"><i class="ti ti-player-play" aria-hidden="true"></i> Démarrer</button>
+              <button class="icon-btn" data-action="pomo-reset" aria-label="Réinitialiser"><i class="ti ti-refresh" aria-hidden="true"></i></button>
             </div>
             <div class="ledger">
               <div class="led"><div class="n" id="pomo-today">0</div><div class="l">Aujourd'hui</div></div>
@@ -347,8 +335,8 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
               <div class="p-title">Notes rapides</div>
             </div>
             <div class="p-tools">
-              <button class="icon-btn" onclick="clearNotes()" aria-label="Effacer"><i class="ti ti-trash" aria-hidden="true"></i></button>
-              <button class="btn" onclick="saveNotes()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Enregistrer</button>
+              <button class="icon-btn" data-action="notes-clear" aria-label="Effacer"><i class="ti ti-trash" aria-hidden="true"></i></button>
+              <button class="btn" data-action="notes-save"><i class="ti ti-device-floppy" aria-hidden="true"></i> Enregistrer</button>
             </div>
           </div>
           <textarea class="notes-area" id="notes" placeholder="Posez vos idées ici…  (⌘/Ctrl + S pour enregistrer)"></textarea>
@@ -357,8 +345,6 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 
       </main>
     </div>
-  </div>
-</div>
 
 <!-- Settings modal -->
 <div class="overlay" id="settings-modal">
@@ -373,7 +359,7 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
     <div class="field">
       <label>Comptes Google connectés</label>
       <div class="gaccounts" id="gaccounts"></div>
-      <button type="button" class="btn-add" onclick="connectGoogle()"><i class="ti ti-plus" aria-hidden="true"></i> Connecter un compte Google</button>
+      <button type="button" class="btn-add" data-action="connect-google"><i class="ti ti-plus" aria-hidden="true"></i> Connecter un compte Google</button>
     </div>
     <div class="field">
       <label>Notion — Token d'intégration</label>
@@ -392,8 +378,8 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
       <span>Vos clés et jetons sont stockés uniquement en local dans <code>~/.focus-app/</code> sur votre Mac.</span>
     </div>
     <div class="modal-btns">
-      <button class="btn" onclick="closeSettings()">Annuler</button>
-      <button class="btn btn-primary" onclick="saveSettings()"><i class="ti ti-check" aria-hidden="true"></i> Connecter</button>
+      <button class="btn" data-action="close-settings">Annuler</button>
+      <button class="btn btn-primary" data-action="save-settings"><i class="ti ti-check" aria-hidden="true"></i> Connecter</button>
     </div>
   </div>
 </div>

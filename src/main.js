@@ -49,6 +49,20 @@ window.winClose = winClose;
 window.winMinimize = winMinimize;
 window.winMaximize = winMaximize;
 
+// Déplacement de la fenêtre via la barre du haut — API Tauri (évite le bug de -webkit-app-region en release).
+const dragStrip = document.querySelector('.drag-strip');
+if (dragStrip) {
+  dragStrip.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const w = appWindow();
+    if (w) w.startDragging();
+  });
+  dragStrip.addEventListener('dblclick', () => {
+    const w = appWindow();
+    if (w) w.toggleMaximize();
+  });
+}
+
 // ─── Notification système ─────────────────────────────────────────────────────
 
 async function sysNotify(title, body) {
@@ -243,13 +257,13 @@ function renderAccountsUI() {
   if (!accounts.length) { c.innerHTML = '<div class="gaccount-empty">Aucun compte connecté.</div>'; return; }
   c.innerHTML = accounts.map(acc => {
     const cals = (acc.calendars || []).map(cal =>
-      `<label><input type="checkbox" ${cal.selected ? 'checked' : ''} onchange="toggleCalendar('${esc(acc.email)}','${esc(cal.id)}',this.checked)"> ${esc(cal.summary || cal.id)}</label>`
+      `<label><input type="checkbox" ${cal.selected ? 'checked' : ''} data-action="toggle-cal" data-email="${esc(acc.email)}" data-cal="${esc(cal.id)}"> ${esc(cal.summary || cal.id)}</label>`
     ).join('') || '<div class="gaccount-empty">Aucun agenda.</div>';
-    const reauth = acc.needsReauth ? `<button class="acc-reauth" onclick="reconnectGoogle('${esc(acc.email)}')">Reconnecter</button>` : '';
+    const reauth = acc.needsReauth ? `<button class="acc-reauth" data-action="reconnect-google" data-email="${esc(acc.email)}">Reconnecter</button>` : '';
     return `<div class="gaccount">
       <div class="gaccount-head"><span class="acc-dot" style="--acc:${esc(acc.color || '')}"></span>
         <span class="acc-mail">${esc(acc.email)}</span>${reauth}
-        <button class="acc-x" onclick="disconnectGoogle('${esc(acc.email)}')" aria-label="Déconnecter"><i class="ti ti-x" aria-hidden="true"></i></button>
+        <button class="acc-x" data-action="disconnect-google" data-email="${esc(acc.email)}" aria-label="Déconnecter"><i class="ti ti-x" aria-hidden="true"></i></button>
       </div>
       <div class="gaccount-cals">${cals}</div>
     </div>`;
@@ -293,6 +307,41 @@ document.getElementById('settings-modal').addEventListener('click', function (e)
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
 
+// ─── Délégation d'événements (pas de onclick inline — bloqués par le CSP en release) ──
+const SIMPLE_ACTIONS = {
+  'export': exportData,
+  'open-settings': openSettings,
+  'close-settings': closeSettings,
+  'save-settings': saveSettings,
+  'connect-google': () => connectGoogle(),
+  'cal-refresh': () => fetchCalendar(true),
+  'add-todo': addTodo,
+  'pomo-toggle': togglePomo,
+  'pomo-prev': pomoPrev,
+  'pomo-reset': resetPomo,
+  'notes-save': saveNotes,
+  'notes-clear': clearNotes,
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const a = el.dataset.action;
+  if (a === 'filter') return filterTickets(el.dataset.filter, el);
+  if (a === 'toggle-todo') return toggleTodo(+el.dataset.i);
+  if (a === 'delete-todo') return deleteTodo(+el.dataset.i);
+  if (a === 'reconnect-google') return reconnectGoogle(el.dataset.email);
+  if (a === 'disconnect-google') return disconnectGoogle(el.dataset.email);
+  if (a === 'toggle-cal') return; // géré par l'événement change
+  if (SIMPLE_ACTIONS[a]) SIMPLE_ACTIONS[a]();
+});
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-action="toggle-cal"]');
+  if (el) toggleCalendar(el.dataset.email, el.dataset.cal, el.checked);
+});
+document.getElementById('todo-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTodo();
+});
+
 // ─── Google Calendar ─────────────────────────────────────────────────────────
 
 function evStart(ev) { return new Date(ev.start.dateTime || ev.start.date).getTime(); }
@@ -303,6 +352,11 @@ function selectedCalCount() {
 
 function emptyBox(icon, text, err = false) {
   return `<div class="empty${err ? ' err' : ''}"><div class="e-ico"><i class="ti ${icon}" aria-hidden="true"></i></div><p>${text}</p></div>`;
+}
+
+// Événements à masquer : anniversaires et plages « Focus time » natifs Google.
+function isHiddenEvent(ev) {
+  return ev.eventType === 'birthday' || ev.eventType === 'focusTime';
 }
 
 function eventHTML(ev) {
@@ -323,7 +377,9 @@ async function fetchEventsFor(acc, cal, timeMin, timeMax) {
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
   const data = await r.json();
   if (data.error) throw new Error(`${acc.email} — ${data.error.message}`);
-  return (data.items || []).map(ev => ({ ...ev, _calLabel: cal.summary || cal.id, _calColor: acc.color || '' }));
+  return (data.items || [])
+    .filter(ev => !isHiddenEvent(ev))
+    .map(ev => ({ ...ev, _calLabel: cal.summary || cal.id, _calColor: acc.color || '' }));
 }
 
 async function fetchCalendar(force = false) {
@@ -343,8 +399,9 @@ async function fetchCalendar(force = false) {
   if (!force) {
     const cached = await loadData('cal_cache');
     if (cached && cached.ts && Date.now() - cached.ts < 5 * 60 * 1000) {
-      el.innerHTML = cached.items.map(eventHTML).join('');
-      st.className = 'chip'; st.textContent = `${cached.items.length} en cache`;
+      const shown = (cached.items || []).filter(ev => !isHiddenEvent(ev));
+      el.innerHTML = shown.map(eventHTML).join('');
+      st.className = 'chip'; st.textContent = `${shown.length} en cache`;
       return;
     }
   }
@@ -504,24 +561,17 @@ function renderTickets(pages) {
 
   const filtered = base.filter(p => getTicketStatus(p.properties) === ticketFilter);
   if (!filtered.length) {
-    const msg = assignee ? `Aucun ticket assigné à « ${esc(config.notionAssignee)} »` : 'Aucun ticket';
-    el.innerHTML = emptyBox('ti-checkbox', msg);
+    el.innerHTML = emptyBox('ti-checkbox', 'Aucun ticket');
     return;
   }
   filtered.forEach(page => {
     const props = page.properties || {};
     const tp = props.Name || props.Nom || props.Title || Object.values(props).find(p => p.type === 'title');
     const title = tp?.title?.map(t => t.plain_text).join('') || 'Sans titre';
-    const meta = CAT_META[getTicketStatus(props)];
     const ref = ticketRef(props);
     const div = document.createElement('div');
     div.className = 'ticket';
-    div.innerHTML = `
-      <div class="tk-title"><span>${esc(title)}${ref ? ` <span class="key">${esc(ref)}</span>` : ''}</span></div>
-      <div class="tk-meta">
-        <span class="badge ${meta.cls}">${meta.label}</span>
-        <span class="tk-date">${new Date(page.last_edited_time).toLocaleDateString('fr-FR')}</span>
-      </div>`;
+    div.innerHTML = `<div class="tk-title"><span>${esc(title)}${ref ? ` <span class="key">${esc(ref)}</span>` : ''}</span></div>`;
     el.appendChild(div);
   });
 }
@@ -554,10 +604,10 @@ function renderTodos() {
     const div = document.createElement('div');
     div.className = 'todo-item';
     div.innerHTML = `
-      <div class="todo-check${t.done ? ' done' : ''}" onclick="toggleTodo(${i})" role="checkbox" aria-checked="${t.done}" aria-label="${esc(t.text)}"></div>
+      <div class="todo-check${t.done ? ' done' : ''}" data-action="toggle-todo" data-i="${i}" role="checkbox" aria-checked="${t.done}" aria-label="${esc(t.text)}"></div>
       <span class="prio-dot ${t.prio || 'med'}"></span>
-      <span class="todo-text${t.done ? ' done' : ''}" onclick="toggleTodo(${i})">${esc(t.text)}</span>
-      <button class="todo-del" onclick="deleteTodo(${i})" aria-label="Supprimer"><i class="ti ti-x" aria-hidden="true"></i></button>`;
+      <span class="todo-text${t.done ? ' done' : ''}" data-action="toggle-todo" data-i="${i}">${esc(t.text)}</span>
+      <button class="todo-del" data-action="delete-todo" data-i="${i}" aria-label="Supprimer"><i class="ti ti-x" aria-hidden="true"></i></button>`;
     el.appendChild(div);
   });
 }
@@ -752,9 +802,10 @@ async function init() {
 
   const calCached = await loadData('cal_cache');
   if (calCached && calCached.items && calCached.items.length) {
-    document.getElementById('events-list').innerHTML = calCached.items.map(eventHTML).join('');
+    const shown = calCached.items.filter(ev => !isHiddenEvent(ev));
+    document.getElementById('events-list').innerHTML = shown.map(eventHTML).join('');
     const st = document.getElementById('cal-status');
-    st.className = 'chip'; st.textContent = `${calCached.items.length} en cache`;
+    st.className = 'chip'; st.textContent = `${shown.length} en cache`;
   }
   const notionCached = await loadData('notion_cache');
   if (notionCached && notionCached.pages) { allTickets = notionCached.pages; renderTickets(allTickets); }
