@@ -301,16 +301,19 @@ function selectedCalCount() {
   return (config.googleAccounts || []).reduce((n, a) => n + (a.calendars || []).filter(c => c.selected).length, 0);
 }
 
+function emptyBox(icon, text, err = false) {
+  return `<div class="empty${err ? ' err' : ''}"><div class="e-ico"><i class="ti ${icon}" aria-hidden="true"></i></div><p>${text}</p></div>`;
+}
+
 function eventHTML(ev) {
   const d = new Date(ev.start.dateTime || ev.start.date);
   const wd = d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
-  const dateStr = (wd + ' ' + d.getDate()).toUpperCase();
   const timeStr = ev.start.dateTime ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'Journée entière';
   // Pastille de source uniquement quand plusieurs agendas sont affichés.
   const multi = selectedCalCount() > 1;
   const src = (multi && (ev._calLabel || ev._calColor))
     ? `<span class="ev-cal" style="--cal:${esc(ev._calColor || '')}">${esc(ev._calLabel || 'Agenda')}</span>` : '';
-  return `<div class="event"><div class="ev-date">${esc(dateStr)}</div><div class="ev-main"><div class="ev-title">${esc(ev.summary || 'Sans titre')}</div><div class="ev-time"><i class="ti ti-clock" style="font-size:12px" aria-hidden="true"></i>${esc(timeStr)}${src}</div></div></div>`;
+  return `<div class="event"><div class="ev-date">${esc(wd)}<br>${d.getDate()}</div><div class="ev-main"><div class="ev-title">${esc(ev.summary || 'Sans titre')}</div><div class="ev-time"><i class="ti ti-clock" aria-hidden="true"></i>${esc(timeStr)}${src}</div></div></div>`;
 }
 
 // Événements d'un agenda d'un compte (jeton Bearer, rafraîchi au besoin).
@@ -333,7 +336,7 @@ async function fetchCalendar(force = false) {
   if (!accounts.length) { st.className = 'chip'; st.textContent = 'Non connecté'; return; }
   if (!tasks.length) {
     st.className = 'chip'; st.textContent = 'Aucun agenda';
-    el.innerHTML = '<div class="empty"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Cochez au moins un<br>agenda dans Connecter</div>';
+    el.innerHTML = emptyBox('ti-calendar-plus', 'Cochez au moins un agenda dans Connecter');
     return;
   }
 
@@ -368,7 +371,7 @@ async function fetchCalendar(force = false) {
 
     if (!items.length && errors.length) {
       st.className = 'chip warn'; st.textContent = 'Erreur API';
-      el.innerHTML = `<div class="empty err"><i class="ti ti-alert-triangle" aria-hidden="true"></i>${esc(errors[0])}</div>`;
+      el.innerHTML = emptyBox('ti-alert-triangle', esc(errors[0]), true);
       return;
     }
     st.className = errors.length ? 'chip warn' : 'chip ok';
@@ -376,10 +379,10 @@ async function fetchCalendar(force = false) {
       ? `${items.length} évén · ${errors.length} err`
       : `${items.length} événement${items.length !== 1 ? 's' : ''}`;
     el.innerHTML = items.length ? items.map(eventHTML).join('')
-      : '<div class="empty"><i class="ti ti-calendar-check" aria-hidden="true"></i>Aucun événement<br>cette semaine</div>';
+      : emptyBox('ti-calendar-check', 'Aucun événement cette semaine');
   } catch (e) {
     st.className = 'chip warn'; st.textContent = 'Erreur API';
-    el.innerHTML = `<div class="empty err"><i class="ti ti-alert-triangle" aria-hidden="true"></i>${esc(e.message)}</div>`;
+    el.innerHTML = emptyBox('ti-alert-triangle', esc(e.message), true);
   } finally {
     icon.classList.remove('spinning');
   }
@@ -404,7 +407,7 @@ async function fetchNotion(force = false) {
     }
   }
 
-  el.innerHTML = '<div class="empty"><i class="ti ti-loader-2 spinning" aria-hidden="true"></i>Chargement…</div>';
+  el.innerHTML = emptyBox('ti-loader-2 spinning', 'Chargement…');
   try {
     // L'API Notion n'autorise pas les appels navigateur (CORS) → on passe par le plugin http (côté Rust).
     const f = tauriHttpFetch || fetch;
@@ -428,7 +431,7 @@ async function fetchNotion(force = false) {
     await saveData('notion_cache', { pages: allTickets, ts: Date.now() });
     renderTickets(allTickets);
   } catch (e) {
-    el.innerHTML = `<div class="empty err"><i class="ti ti-alert-triangle" aria-hidden="true"></i>${esc(e.message)}</div>`;
+    el.innerHTML = emptyBox('ti-alert-triangle', esc(e.message), true);
   }
 }
 
@@ -502,7 +505,7 @@ function renderTickets(pages) {
   const filtered = base.filter(p => getTicketStatus(p.properties) === ticketFilter);
   if (!filtered.length) {
     const msg = assignee ? `Aucun ticket assigné à « ${esc(config.notionAssignee)} »` : 'Aucun ticket';
-    el.innerHTML = `<div class="empty"><i class="ti ti-checkbox" aria-hidden="true"></i>${msg}</div>`;
+    el.innerHTML = emptyBox('ti-checkbox', msg);
     return;
   }
   filtered.forEach(page => {
@@ -514,10 +517,10 @@ function renderTickets(pages) {
     const div = document.createElement('div');
     div.className = 'ticket';
     div.innerHTML = `
-      <div class="tk-title">${esc(title)}${ref ? ` <span class="tk-ref">${esc(ref)}</span>` : ''}</div>
+      <div class="tk-title"><span>${esc(title)}${ref ? ` <span class="key">${esc(ref)}</span>` : ''}</span></div>
       <div class="tk-meta">
         <span class="badge ${meta.cls}">${meta.label}</span>
-        <span>${new Date(page.last_edited_time).toLocaleDateString('fr-FR')}</span>
+        <span class="tk-date">${new Date(page.last_edited_time).toLocaleDateString('fr-FR')}</span>
       </div>`;
     el.appendChild(div);
   });
@@ -546,12 +549,12 @@ function renderTodos() {
   el.innerHTML = '';
   const remaining = todos.filter(t => !t.done).length;
   document.getElementById('todo-count').textContent = `${remaining}/${todos.length} tâche${todos.length !== 1 ? 's' : ''}`;
-  if (!todos.length) { el.innerHTML = '<div class="empty"><i class="ti ti-list-check" aria-hidden="true"></i>Aucune tâche —<br>profitez-en !</div>'; return; }
+  if (!todos.length) { el.innerHTML = emptyBox('ti-coffee', 'Aucune tâche — profitez-en !'); return; }
   todos.forEach((t, i) => {
     const div = document.createElement('div');
-    div.className = 'todo';
+    div.className = 'todo-item';
     div.innerHTML = `
-      <div class="check${t.done ? ' done' : ''}" onclick="toggleTodo(${i})" role="checkbox" aria-checked="${t.done}" aria-label="${esc(t.text)}"></div>
+      <div class="todo-check${t.done ? ' done' : ''}" onclick="toggleTodo(${i})" role="checkbox" aria-checked="${t.done}" aria-label="${esc(t.text)}"></div>
       <span class="prio-dot ${t.prio || 'med'}"></span>
       <span class="todo-text${t.done ? ' done' : ''}" onclick="toggleTodo(${i})">${esc(t.text)}</span>
       <button class="todo-del" onclick="deleteTodo(${i})" aria-label="Supprimer"><i class="ti ti-x" aria-hidden="true"></i></button>`;
@@ -577,7 +580,7 @@ window.deleteTodo = deleteTodo;
 // ─── Pomodoro ────────────────────────────────────────────────────────────────
 
 const POMO_TIMES = { focus: 25 * 60, short: 5 * 60, long: 15 * 60 };
-const CIRC = 2 * Math.PI * 52;
+const CIRC = 2 * Math.PI * 80;
 
 let pomoState = { running: false, seconds: 25 * 60, mode: 'focus', total: 0, todaySessions: 0, todayDate: '' };
 let pomoInterval = null;
@@ -604,7 +607,7 @@ function updatePomoUI() {
   const pct = (total - pomoState.seconds) / total;
   const ring = document.getElementById('pomo-ring');
   ring.style.strokeDashoffset = CIRC * (1 - pct);
-  ring.style.stroke = pomoState.mode === 'focus' ? 'var(--accent)' : 'var(--st-done)';
+  ring.style.stroke = pomoState.mode === 'focus' ? 'var(--sky-ink)' : 'var(--mint-ink)';
   const labels = { focus: 'Concentration', short: 'Pause courte', long: 'Pause longue' };
   document.getElementById('pomo-mode-label').textContent = labels[pomoState.mode];
   document.getElementById('pomo-today').textContent = pomoState.todaySessions;
