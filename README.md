@@ -83,12 +83,14 @@ puis ouvre la fenêtre de l'app avec rechargement automatique.
 npm run build
 ```
 
-Le fichier `.app` et le `.dmg` installable se trouvent dans :
+Le bundle est configuré sur `"targets": ["app"]` : la compilation génère donc
+uniquement le `.app` (pas de `.dmg`), dans :
 ```
 src-tauri/target/release/bundle/macos/Focus.app
-src-tauri/target/release/bundle/dmg/Focus_1.0.0_aarch64.dmg   ← Apple Silicon
-src-tauri/target/release/bundle/dmg/Focus_1.0.0_x64.dmg       ← Intel
 ```
+
+> Pour aussi générer un `.dmg`, passe `targets` à `["app", "dmg"]` dans
+> `src-tauri/tauri.conf.json`, ou lance `npm run build -- --bundles dmg`.
 
 > **Note :** Sans certificat Apple Developer (99$/an), macOS affichera un avertissement
 > "développeur non identifié". Pour contourner : clic droit sur l'app → Ouvrir, ou :
@@ -113,13 +115,13 @@ Lance l'app et clique sur **"Connecter"** dans la barre du haut.
 
 ### Notion
 
-1. Va sur [notion.so/my-integrations](https://www.notion.so/my-integrations)
-2. **New integration** → donne un nom → sélectionne ton workspace → Submit
-3. Copie le **Internal Integration Token** (`secret_...`)
-4. Dans ta base de données Notion : **⋯ → Connections → connecte ton intégration**
+1. Va sur [app.notion.com/developers/tokens](https://app.notion.com/developers/tokens)
+2. Ouvre l'onglet **Jetons d'accès personnels**
+3. **Créer un jeton** → donne un nom → sélectionne ton workspace → Enregistrer
+4. Copie le **jeton personnel** (`ntn_...`)
 5. Copie l'ID de la DB depuis l'URL :
    `https://notion.so/Mon-espace/`**`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`**`?v=...`
-6. Dans l'app : colle le token et l'ID
+6. Dans l'app : colle le jeton et l'ID
 
 ---
 
