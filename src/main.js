@@ -354,9 +354,9 @@ function emptyBox(icon, text, err = false) {
   return `<div class="empty${err ? ' err' : ''}"><div class="e-ico"><i class="ti ${icon}" aria-hidden="true"></i></div><p>${text}</p></div>`;
 }
 
-// Événements à masquer : anniversaires et plages « Focus time » natifs Google.
+// Événements à masquer : anniversaires, plages « Focus time » et lieux de travail natifs Google.
 function isHiddenEvent(ev) {
-  return ev.eventType === 'birthday' || ev.eventType === 'focusTime';
+  return ev.eventType === 'birthday' || ev.eventType === 'focusTime' || ev.eventType === 'workingLocation';
 }
 
 function eventHTML(ev) {
