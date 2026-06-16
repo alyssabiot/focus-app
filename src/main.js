@@ -148,16 +148,16 @@ async function tokenRequest(body) {
   return data;
 }
 
-async function fetchUserEmail(token) {
+async function fetchUserInfo(token) {
   try {
     const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token } });
     const d = await r.json();
-    return d.email || '';
-  } catch { return ''; }
+    return { email: d.email || '', name: d.name || '' };
+  } catch { return { email: '', name: '' }; }
 }
 
 async function fetchCalendarList(token) {
-  const r = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250', { headers: { Authorization: 'Bearer ' + token } });
+  const r = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250&showHidden=true', { headers: { Authorization: 'Bearer ' + token } });
   const d = await r.json();
   if (d.error) throw new Error(d.error.message);
   return (d.items || []).map(c => ({ id: c.id, summary: c.summaryOverride || c.summary || c.id, primary: !!c.primary }));
@@ -205,12 +205,13 @@ async function connectGoogle(loginHint) {
       client_secret: clientSecret,
       redirect_uri: res.redirect_uri,
     });
-    const email = await fetchUserEmail(tok.access_token);
+    const { email, name } = await fetchUserInfo(tok.access_token);
     const cals = await fetchCalendarList(tok.access_token);
     const existing = config.googleAccounts.find(a => a.email === email);
     const color = existing?.color || CAL_COLORS[config.googleAccounts.length % CAL_COLORS.length];
     const account = {
       email: email || ('compte-' + (config.googleAccounts.length + 1)),
+      name: name || existing?.name || '',
       refreshToken: tok.refresh_token || existing?.refreshToken || '',
       accessToken: tok.access_token,
       expiresAt: Date.now() + (tok.expires_in || 3600) * 1000,
@@ -242,6 +243,29 @@ function disconnectGoogle(email) {
   fetchCalendar(true);
 }
 
+// Re-récupère la liste des agendas d'un compte (sans reconnexion OAuth), en
+// conservant les cases cochées. Utile quand un agenda partagé a été ajouté après coup.
+async function refreshCalendars(email) {
+  const acc = config.googleAccounts.find(a => a.email === email);
+  if (!acc) return;
+  try {
+    const token = await getValidToken(acc);
+    const [info, cals] = await Promise.all([fetchUserInfo(token), fetchCalendarList(token)]);
+    if (info.name) acc.name = info.name; // capte le nom complet (pour les libellés OOO)
+    acc.calendars = cals.map(c => ({
+      id: c.id,
+      summary: c.summary,
+      selected: !!acc.calendars?.find(x => x.id === c.id)?.selected,
+    }));
+    await saveData('config', config);
+    renderAccountsUI();
+    notify(`${cals.length} agenda${cals.length !== 1 ? 's' : ''} pour ${email}.`);
+  } catch (e) {
+    if (e._reauth) renderAccountsUI();
+    notify('Rafraîchissement : ' + e.message, 'err');
+  }
+}
+
 function toggleCalendar(email, calId, checked) {
   const acc = config.googleAccounts.find(a => a.email === email);
   const cal = acc && acc.calendars.find(c => c.id === calId);
@@ -263,6 +287,7 @@ function renderAccountsUI() {
     return `<div class="gaccount">
       <div class="gaccount-head"><span class="acc-dot" style="--acc:${esc(acc.color || '')}"></span>
         <span class="acc-mail">${esc(acc.email)}</span>${reauth}
+        <button class="acc-refresh" data-action="refresh-cals" data-email="${esc(acc.email)}" title="Rafraîchir les agendas" aria-label="Rafraîchir les agendas"><i class="ti ti-refresh" aria-hidden="true"></i></button>
         <button class="acc-x" data-action="disconnect-google" data-email="${esc(acc.email)}" aria-label="Déconnecter"><i class="ti ti-x" aria-hidden="true"></i></button>
       </div>
       <div class="gaccount-cals">${cals}</div>
@@ -274,6 +299,24 @@ window.reconnectGoogle = reconnectGoogle;
 window.disconnectGoogle = disconnectGoogle;
 window.toggleCalendar = toggleCalendar;
 
+// Remplit le menu déroulant « agenda des congés » avec tous les agendas connectés.
+function populateCongesSelect() {
+  const sel = document.getElementById('conges-cal');
+  const accounts = config.googleAccounts || [];
+  const cur = config.congesCalId || '';
+  const multi = accounts.length > 1;
+  const ids = new Set();
+  let html = '<option value="">— Aucun —</option>';
+  accounts.forEach(acc => (acc.calendars || []).forEach(cal => {
+    ids.add(cal.id);
+    const label = multi ? `${cal.summary || cal.id} · ${acc.email}` : (cal.summary || cal.id);
+    html += `<option value="${esc(cal.id)}"${cal.id === cur ? ' selected' : ''}>${esc(label)}</option>`;
+  }));
+  // Valeur enregistrée mais absente de la liste (ancien nom, agenda retiré…) → conservée.
+  if (cur && !ids.has(cur)) html += `<option value="${esc(cur)}" selected>${esc(cur)} (introuvable)</option>`;
+  sel.innerHTML = html;
+}
+
 function openSettings() {
   document.getElementById('goauth-client-id').value = config.googleOAuth?.clientId || '';
   document.getElementById('goauth-client-secret').value = config.googleOAuth?.clientSecret || '';
@@ -281,6 +324,8 @@ function openSettings() {
   document.getElementById('notion-token').value = config.notionToken || '';
   document.getElementById('notion-db').value = config.notionDb || '';
   document.getElementById('notion-assignee').value = config.notionAssignee || '';
+  document.getElementById('roadmap-db').value = config.roadmapDb || '';
+  populateCongesSelect();
   document.getElementById('settings-modal').classList.add('open');
 }
 
@@ -296,10 +341,12 @@ async function saveSettings() {
   config.notionToken = document.getElementById('notion-token').value.trim();
   config.notionDb = document.getElementById('notion-db').value.trim();
   config.notionAssignee = document.getElementById('notion-assignee').value.trim();
+  config.roadmapDb = document.getElementById('roadmap-db').value.trim();
+  config.congesCalId = document.getElementById('conges-cal').value.trim();
   await saveData('config', config);
   closeSettings();
   notify('Connexions enregistrées.');
-  await Promise.all([fetchCalendar(true), fetchNotion(true)]);
+  await Promise.all([fetchCalendar(true), fetchNotion(true), fetchRoadmap(true), fetchRoadmapLeaves(true)]);
 }
 
 document.getElementById('settings-modal').addEventListener('click', function (e) {
@@ -315,6 +362,7 @@ const SIMPLE_ACTIONS = {
   'save-settings': saveSettings,
   'connect-google': () => connectGoogle(),
   'cal-refresh': () => fetchCalendar(true),
+  'roadmap-refresh': () => refreshRoadmap(),
   'add-todo': addTodo,
   'pomo-toggle': togglePomo,
   'pomo-prev': pomoPrev,
@@ -330,6 +378,7 @@ document.addEventListener('click', e => {
   if (a === 'toggle-todo') return toggleTodo(+el.dataset.i);
   if (a === 'delete-todo') return deleteTodo(+el.dataset.i);
   if (a === 'reconnect-google') return reconnectGoogle(el.dataset.email);
+  if (a === 'refresh-cals') return refreshCalendars(el.dataset.email);
   if (a === 'disconnect-google') return disconnectGoogle(el.dataset.email);
   if (a === 'toggle-cal') return; // géré par l'événement change
   if (SIMPLE_ACTIONS[a]) SIMPLE_ACTIONS[a]();
@@ -585,6 +634,488 @@ function filterTickets(f, btn) {
 window.filterTickets = filterTickets;
 window.fetchCalendar = fetchCalendar;
 
+// ─── Roadmap / Timeline (voile congés) ─────────────────────────────────────────
+//
+// Barres = epics d'une base Notion DÉDIÉE (config.roadmapDb, même token que les
+// tickets), positionnées via la propriété de date « plage » nommée « Date ».
+// On ne garde que les projets dont « Ministère » = « Qualité » et qui ont une date.
+// Le voile de congés est superposé depuis un agenda Google dédié (fetchRoadmapLeaves).
+// Réglages figés (cf. maquette finalisée) : échelle semaine, voile aplat, schéma pastel.
+
+const DAY_MS = 86400000;
+const RM_DATE_PROP = 'Date';        // propriété Notion de la plage (début → fin)
+const RM_MINISTERE = 'qualité';     // filtre : Ministère = Qualité (insensible casse/accent)
+
+// Statuts Notion réels (option = libellé + emoji) → palette/label de la timeline.
+// NO-GO est volontairement exclu de l'affichage (cf. roadmapStatus → 'nogo').
+const RM_STATUS = {
+  candidats:    { label: 'Candidats',     pal: 'lav'    }, // 🍭
+  conception:   { label: 'Conception',    pal: 'sky'    }, // 🌀
+  developpement:{ label: 'Développement', pal: 'peach'  }, // 🧨
+  done:         { label: 'Done',          pal: 'mint'   }, // 🌱
+};
+// Renvoie la clé de statut (clé de RM_STATUS), 'nogo' (à exclure) ou '' (inconnu).
+function roadmapStatus(props) {
+  const sp = props && (props['État'] || props.Status || props.status || props.Statut || props.Etat);
+  let val = '';
+  if (sp) {
+    if (sp.status) val = (sp.status.name || '').toLowerCase();
+    else if (sp.select) val = (sp.select.name || '').toLowerCase();
+    else if (sp.rich_text) val = (sp.rich_text[0]?.plain_text || '').toLowerCase();
+  }
+  if (val.includes('no-go') || val.includes('no go') || val.includes('nogo')) return 'nogo';
+  if (val.includes('candidat')) return 'candidats';
+  if (val.includes('conception')) return 'conception';
+  if (val.includes('développement') || val.includes('developpement') || val.includes('dev')) return 'developpement';
+  if (val.includes('done') || val.includes('termin') || val.includes('fini')) return 'done';
+  return '';
+}
+// Métadonnées d'un statut, avec repli neutre pour un statut non répertorié.
+const statusMeta = key => RM_STATUS[key] || { label: '—', pal: 'butter' };
+
+// Congés du voile, chargés via fetchRoadmapLeaves() (agenda Google). { who, type, start, end }
+let roadmapConges = [];
+
+// Palette des personnes (avatars + voile), volontairement distincte des couleurs de statut.
+const AV_PALETTE = ['rose', 'teal', 'indigo', 'sand', 'slate'];
+// Teintes des bandes de congé par palette (alignées sur les règles CSS .tl-band.band-*).
+const BAND_TINT = {
+  rose: 'rgba(215,106,147,.18)',
+  teal: 'rgba(63,166,158,.18)',
+  indigo: 'rgba(111,116,214,.18)',
+  sand: 'rgba(176,125,86,.18)',
+  slate: 'rgba(107,122,144,.18)',
+};
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+}
+function avatarHTML(name, av, size = 18, showTitle = true) {
+  const title = showTitle ? ` title="${esc(name)}"` : '';
+  return `<span class="tl-av av-${av}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px"${title}>${esc(initials(name))}</span>`;
+}
+
+// Première personne d'une propriété people, sinon ''.
+function pageLead(props) {
+  const pp = Object.values(props || {}).find(p => p && p.type === 'people' && (p.people || []).length);
+  return pp ? (pp.people[0].name || '') : '';
+}
+// Titre de la page Notion.
+function pageTitle(props) {
+  const tp = props.Name || props.Nom || props.Title || Object.values(props || {}).find(p => p && p.type === 'title');
+  return tp?.title?.map(t => t.plain_text).join('') || 'Sans titre';
+}
+
+const startOfMonth = d => new Date(d.getFullYear(), d.getMonth(), 1);
+const monthLabel = d => d.toLocaleDateString('fr-FR', { month: 'long' }).replace(/^./, c => c.toUpperCase());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return addDays(x, -((x.getDay() + 6) % 7)); };
+const fmtDate = d => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+// Fenêtre visible = 8 semaines à partir de la semaine en cours ; scroll latéral
+// jusqu'à 8 semaines avant (et au-delà à droite pour couvrir la fin des projets).
+const RM_VISIBLE_WEEKS = 8;
+const RM_BEFORE_WEEKS = 8;
+const RM_WEEK_MIN_PX = 96; // largeur de repli si la zone n'est pas mesurable
+let roadmapPages = null;   // dernières pages rendues (re-render au resize)
+let roadmapResizeBound = false;
+
+async function fetchRoadmap(force = false) {
+  const { notionToken, roadmapDb } = config;
+  const body = document.getElementById('roadmap-body');
+  if (!notionToken || !roadmapDb) return;
+
+  if (!force) {
+    const cached = await loadData('roadmap_cache');
+    if (cached && cached.ts && Date.now() - cached.ts < 5 * 60 * 1000) {
+      renderRoadmap(cached.pages);
+      return;
+    }
+  }
+
+  body.innerHTML = emptyBox('ti-loader-2 spinning', 'Chargement…');
+  try {
+    const f = tauriHttpFetch || fetch;
+    const headers = { 'Authorization': 'Bearer ' + notionToken, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' };
+    const results = [];
+    let cursor, guard = 0;
+    do {
+      const q = { page_size: 100 };
+      if (cursor) q.start_cursor = cursor;
+      const r = await f(`https://api.notion.com/v1/databases/${roadmapDb}/query`, { method: 'POST', headers, body: JSON.stringify(q) });
+      const data = await r.json();
+      if (data.status && data.status >= 400) throw new Error(data.message || 'Erreur Notion');
+      results.push(...(data.results || []));
+      cursor = data.has_more ? data.next_cursor : null;
+      guard++;
+    } while (cursor && guard < 20);
+    console.info(`Roadmap : ${results.length} pages récupérées (${guard} page(s))`);
+    await saveData('roadmap_cache', { pages: results, ts: Date.now() });
+    renderRoadmap(results);
+  } catch (e) {
+    body.innerHTML = emptyBox('ti-alert-triangle', esc(e.message), true);
+  }
+}
+
+// Extrait {start,end} de la propriété de date « Date ». null si absente.
+function readPeriod(props) {
+  const p = props && props[RM_DATE_PROP];
+  if (!p || p.type !== 'date' || !p.date || !p.date.start) return null;
+  const start = new Date(p.date.start);
+  const end = p.date.end ? new Date(p.date.end) : new Date(+start + 14 * DAY_MS);
+  return { start, end };
+}
+
+// Vrai si la propriété « Ministère » vaut « Qualité » (select / status / multi-select).
+function isMinistereQualite(props) {
+  const m = props && props['Ministère'];
+  if (!m) return false;
+  const names = [];
+  if (m.select) names.push(m.select.name);
+  if (m.status) names.push(m.status.name);
+  if (m.multi_select) names.push(...m.multi_select.map(o => o.name));
+  if (m.rich_text) names.push(m.rich_text.map(t => t.plain_text).join(''));
+  return names.some(n => (n || '').toLowerCase().includes(RM_MINISTERE));
+}
+
+// Fusionne, par personne, les plages de congés qui se chevauchent, se touchent, ou
+// ne sont séparées que par un week-end (jour travaillé = lundi → vendredi).
+function mergeLeaves(list) {
+  const isWorked = d => { const wd = d.getDay(); return wd >= 1 && wd <= 5; };
+  // Vrai s'il existe au moins un jour travaillé strictement entre aEnd et bStart.
+  const workedBetween = (aEnd, bStart) => {
+    for (let d = addDays(aEnd, 1); d < bStart; d = addDays(d, 1)) if (isWorked(d)) return true;
+    return false;
+  };
+  const byWho = {};
+  list.forEach(c => { (byWho[c.who] = byWho[c.who] || []).push(c); });
+  const out = [];
+  Object.keys(byWho).forEach(who => {
+    const items = byWho[who]
+      .map(c => ({ who, type: c.type, s: toLocalDate(c.start), e: toLocalDate(c.end) }))
+      .sort((a, b) => a.s - b.s);
+    let cur = null;
+    items.forEach(it => {
+      if (cur && !workedBetween(cur.e, it.s)) { if (it.e > cur.e) cur.e = it.e; } // fusion
+      else { if (cur) out.push(cur); cur = { ...it }; }
+    });
+    if (cur) out.push(cur);
+  });
+  return out.map(c => ({ who: c.who, type: c.type, start: ymd(c.s), end: ymd(c.e) }));
+}
+
+function renderRoadmap(pages) {
+  roadmapPages = pages; // mémorisé pour re-render au resize
+  const body = document.getElementById('roadmap-body');
+  const statutsEl = document.getElementById('roadmap-statuts');
+  const teamEl = document.getElementById('roadmap-team');
+  const rangeEl = document.getElementById('roadmap-range');
+
+  // Légende statuts (statique).
+  statutsEl.innerHTML = Object.entries(RM_STATUS)
+    .map(([k, s]) => `<span class="tl-leg"><span class="dot st-${s.pal}"></span>${s.label}</span>`).join('');
+
+  // Projets = pages « Ministère = Qualité » ayant une période ; on exclut NO-GO et les sans-date.
+  let projects = pages.map(pg => {
+    const props = pg.properties || {};
+    if (!isMinistereQualite(props)) return null;
+    const status = roadmapStatus(props);
+    if (status === 'nogo') return null;
+    const per = readPeriod(props);
+    if (!per) return null;
+    return { ref: ticketRef(props), name: pageTitle(props), status, lead: pageLead(props), start: per.start, end: per.end };
+  }).filter(Boolean).sort((a, b) => a.start - b.start);
+
+  if (!projects.length) {
+    body.innerHTML = emptyBox('ti-timeline', 'Aucun projet « Qualité » daté dans cette base');
+    teamEl.innerHTML = '';
+    rangeEl.innerHTML = '<i class="ti ti-calendar-month" aria-hidden="true"></i> —';
+    return;
+  }
+
+  // Fenêtre : début = lundi 8 semaines avant la semaine en cours ;
+  // fin = au moins 8 semaines après la semaine en cours, étendue pour couvrir
+  // la fin du dernier projet (atteignable par scroll latéral).
+  const curMonday = mondayOf(new Date());
+  const WIN_START = addDays(curMonday, -RM_BEFORE_WEEKS * 7);
+  // On ne garde que les projets atteignables (fin après le bord gauche de la fenêtre).
+  projects = projects.filter(p => p.end > WIN_START);
+  if (!projects.length) {
+    body.innerHTML = emptyBox('ti-timeline', 'Aucun projet « Qualité » sur la période');
+    teamEl.innerHTML = '';
+    rangeEl.innerHTML = '<i class="ti ti-calendar-month" aria-hidden="true"></i> —';
+    return;
+  }
+  const maxEnd = projects.reduce((m, p) => p.end > m ? p.end : m, projects[0].end);
+  let WIN_END = addDays(curMonday, RM_VISIBLE_WEEKS * 7);
+  if (maxEnd > WIN_END) WIN_END = mondayOf(addDays(maxEnd, 6)); // arrondi au lundi suivant
+  const totalWeeks = Math.round((WIN_END - WIN_START) / (7 * DAY_MS));
+  const SPAN = WIN_END - WIN_START;
+  const pct = dt => ((dt - WIN_START) / SPAN) * 100;
+
+  // Mois chevauchant la fenêtre (bornés à [WIN_START, WIN_END]).
+  const months = [];
+  for (let d = startOfMonth(WIN_START); d < WIN_END; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    const ms = new Date(d), me = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    months.push({ label: monthLabel(d), start: ms < WIN_START ? WIN_START : ms, end: me > WIN_END ? WIN_END : me });
+  }
+  // Lundis de la fenêtre (WIN_START est déjà un lundi).
+  const mondays = [];
+  for (let d = new Date(WIN_START); d < WIN_END; d = addDays(d, 7)) mondays.push(new Date(d));
+
+  const winLast = addDays(WIN_END, -1);
+  const rangeYear = winLast.getFullYear() === WIN_START.getFullYear() ? `${winLast.getFullYear()}` : `${WIN_START.getFullYear()}–${winLast.getFullYear()}`;
+  rangeEl.innerHTML = `<i class="ti ti-calendar-month" aria-hidden="true"></i> ${esc(monthLabel(WIN_START))} – ${esc(monthLabel(winLast))} ${rangeYear} · ${RM_VISIBLE_WEEKS} sem. visibles`;
+
+  // Couche grille (semaines + mois forts).
+  const gridLayer = mondays.map(m => `<span class="tl-gl" style="left:${pct(m)}%"></span>`).join('')
+    + months.map(m => `<span class="tl-gl strong" style="left:${pct(m.start)}%"></span>`).join('');
+
+  // Congés fusionnés par personne (plages qui se chevauchent, se touchent, ou ne
+  // sont séparées que par des jours non travaillés → week-ends et fériés).
+  const conges = mergeLeaves(roadmapConges);
+  // Couleur unifiée par personne (avatars des barres, voile et légende).
+  const people = [...new Set([...projects.map(p => p.lead).filter(Boolean), ...conges.map(c => c.who)])];
+  const personAv = Object.fromEntries(people.map((n, i) => [n, AV_PALETTE[i % AV_PALETTE.length]]));
+
+  // Voile congés (aplat) : bandes teintées DERRIÈRE les barres, pastilles AU-DESSUS de tout.
+  // Plages identiques (mêmes dates) partagées par plusieurs personnes → un seul tag combiné.
+  const congeGroups = {};
+  conges.forEach(c => { (congeGroups[`${c.start}|${c.end}`] = congeGroups[`${c.start}|${c.end}`] || []).push(c); });
+  const bands = [], caps = [];
+  Object.values(congeGroups).forEach(grp => {
+    const c = grp[0];
+    const cs = toLocalDate(c.start), ce = new Date(+toLocalDate(c.end) + DAY_MS); // fin exclusive
+    if (ce <= WIN_START || cs >= WIN_END) return;
+    const left = Math.max(0, pct(cs)), width = Math.min(100, pct(ce)) - left;
+    const dates = `${fmtDate(cs)} → ${fmtDate(toLocalDate(c.end))}`;
+    const firstName = n => n.split(/\s+/)[0];
+    if (grp.length === 1) {
+      const pal = personAv[c.who] || 'slate';
+      bands.push(`<div class="tl-band band-${pal}" style="left:${left}%;width:${width}%"></div>`);
+      caps.push(`<div class="tl-band-cap" style="left:${left + width / 2}%" title="${esc(`${firstName(c.who)} · ${dates}`)}">${avatarHTML(c.who, pal, 18, false)}</div>`);
+    } else {
+      // Congé commun : bande en couleurs combinées (dégradé en bandes des couleurs de chacun) + tag combiné.
+      const names = grp.map(g => g.who);
+      const tints = names.map(n => BAND_TINT[personAv[n] || 'slate'] || BAND_TINT.slate);
+      const stops = tints.map((c, i) => `${c} ${(i / tints.length * 100).toFixed(2)}% ${((i + 1) / tints.length * 100).toFixed(2)}%`).join(', ');
+      const avs = names.map(n => avatarHTML(n, personAv[n] || 'slate', 18, false)).join('');
+      bands.push(`<div class="tl-band" style="left:${left}%;width:${width}%;background:linear-gradient(135deg, ${stops})"></div>`);
+      caps.push(`<div class="tl-band-cap is-multi" style="left:${left + width / 2}%" title="${esc(`${names.map(firstName).join(' & ')} · ${dates}`)}">${avs}</div>`);
+    }
+  });
+  const veil = bands.join(''), veilCaps = caps.join('');
+
+  // Axe : mois + numéros de semaine.
+  const axis =
+    `<div class="tl-months">${months.map(m => `<div class="tl-mo" style="left:${pct(m.start)}%;width:${pct(m.end) - pct(m.start)}%"><span>${esc(m.label)}</span></div>`).join('')}</div>`
+    + `<div class="tl-weeks">${mondays.map(m => `<div class="tl-wk" style="left:${pct(m)}%">${m.getDate()}</div>`).join('')}</div>`;
+
+  // Barres projets (tooltip natif au survol : nom complet + dates).
+  const tracks = projects.map(p => {
+    const s = statusMeta(p.status);
+    const left = Math.max(0, pct(p.start)), width = Math.max(0, Math.min(100, pct(p.end)) - left);
+    const lead = p.lead ? avatarHTML(p.lead, personAv[p.lead], 18) : '';
+    const tip = `${p.name}${p.ref ? ` (${p.ref})` : ''} · ${fmtDate(p.start)} → ${fmtDate(p.end)}`;
+    return `<div class="tl-track"><div class="tl-bar st-${s.pal}" style="left:${left}%;width:${width}%" title="${esc(tip)}">${lead}<span class="tl-bar-name">${esc(p.name)}</span>${p.ref ? `<span class="tl-bar-ref">${esc(p.ref)}</span>` : ''}</div></div>`;
+  }).join('');
+
+  // Repère « Aujourd'hui » (masqué hors fenêtre).
+  const today = new Date();
+  const todayMark = (today >= WIN_START && today < WIN_END)
+    ? `<div class="tl-today" style="left:${pct(today)}%"><span class="tl-today-cap">Aujourd’hui</span></div>` : '';
+
+  body.innerHTML = `<div class="tl-body">
+    <div class="tl-scroll">
+      <div class="tl-plot">
+        <div class="tl-grid-layer">${gridLayer}</div>
+        <div class="tl-veil">${veil}</div>
+        <div class="tl-axis">${axis}</div>
+        <div class="tl-tracks">${tracks}</div>
+        ${todayMark}
+        <div class="tl-veil-caps">${veilCaps}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // Largeur d'une semaine = largeur visible / 8 → la zone tracée fait totalWeeks semaines,
+  // et on positionne le scroll sur la semaine en cours (8 semaines depuis le bord gauche).
+  const scroller = body.querySelector('.tl-scroll');
+  const plot = body.querySelector('.tl-plot');
+  const weekW = (scroller.clientWidth || RM_VISIBLE_WEEKS * RM_WEEK_MIN_PX) / RM_VISIBLE_WEEKS;
+  plot.style.width = (totalWeeks * weekW) + 'px';
+  scroller.scrollLeft = RM_BEFORE_WEEKS * weekW;
+
+  // Légende équipe : toute personne présente (lead de projet ou en congé), même couleur partout.
+  teamEl.innerHTML = people.map(name => `<span class="tl-leg">${avatarHTML(name, personAv[name], 18)} ${esc(name.split(/\s+/)[0])}</span>`).join('');
+
+  // Re-render au redimensionnement (recale la largeur de semaine sur la nouvelle largeur visible).
+  if (!roadmapResizeBound) {
+    roadmapResizeBound = true;
+    let rt;
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (roadmapPages) renderRoadmap(roadmapPages); }, 150); });
+  }
+}
+
+window.fetchRoadmap = fetchRoadmap;
+
+// ─── Congés (voile de la roadmap) — depuis un agenda Google dédié ───────────────
+//
+// Agenda Google dédié (config.congesCalId = nom ou ID) dont chaque événement est
+// une absence, titre « Absence - Prénom Nom ». On réutilise le jeton OAuth Google
+// (getValidToken) ; on parse personne + dates → roadmapConges.
+
+// "YYYY-MM-DD" → date locale (évite le décalage UTC) ; sinon Date(dateTime).
+function toLocalDate(raw) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw || '');
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
+}
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// « Absence - Prénom Nom » → { who, type, start, end }. Gère les événements journée entière.
+function parseLeave(ev) {
+  const sum = (ev.summary || '').trim();
+  const startRaw = ev.start && (ev.start.date || ev.start.dateTime);
+  if (!sum || !startRaw) return null;
+  // Convention de l'agenda dédié : « Absence - Prénom Nom » (ou « Congé(s) - … »).
+  const m = sum.match(/^\s*(?:absences?|cong[eé]s?)\s*[-–—:]\s*(.+)$/i);
+  if (!m) return null; // événement hors-convention → ignoré
+  const who = m[1].trim();
+  // Fin : pour un événement journée entière, end.date est EXCLUSIVE → dernier jour = -1.
+  let end;
+  if (ev.end && ev.end.date) end = addDays(toLocalDate(ev.end.date), -1);
+  else if (ev.end && ev.end.dateTime) end = new Date(ev.end.dateTime);
+  else end = toLocalDate(startRaw);
+  return { who, type: 'Absence', start: ymd(toLocalDate(startRaw)), end: ymd(end) };
+}
+
+// Email → nom lisible (repli). « alyssa.biot@… » → « Alyssa Biot ».
+const humanizeEmail = email => (email || '').split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+
+// « Absent du bureau » (OOO Google) → { who, type, start, end }. Si l'absence est celle
+// du titulaire du compte, on prend le nom complet du compte (acc.name) plutôt que le
+// prénom seul souvent renvoyé par l'organisateur.
+function parseOOO(ev, acc) {
+  const startRaw = ev.start && (ev.start.date || ev.start.dateTime);
+  if (!startRaw) return null;
+  const orgEmail = (ev.organizer && ev.organizer.email) || '';
+  const isSelf = !orgEmail || orgEmail === acc.email;
+  const who = (isSelf && acc.name)
+    || (ev.organizer && ev.organizer.displayName)
+    || (ev.creator && ev.creator.displayName)
+    || acc.name || humanizeEmail(acc.email);
+  let end;
+  if (ev.end && ev.end.date) end = addDays(toLocalDate(ev.end.date), -1);
+  else if (ev.end && ev.end.dateTime) end = new Date(ev.end.dateTime);
+  else end = toLocalDate(startRaw);
+  return { who, type: 'Absence', start: ymd(toLocalDate(startRaw)), end: ymd(end) };
+}
+
+// Événements d'un agenda sur la fenêtre. opts : { eventType, q } (type Google et/ou recherche texte).
+async function listCalEvents(calId, token, timeMin, timeMax, opts = {}) {
+  let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`
+    + `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=2500`;
+  if (opts.eventType) url += `&eventTypes=${opts.eventType}`;
+  if (opts.q) url += `&q=${encodeURIComponent(opts.q)}`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.items || [];
+}
+const OOO_RE = /absent\s+du\s+bureau|out of office|hors du bureau/i;
+const CONGES_CACHE_V = 2; // bump → invalide l'ancien cache après changement de logique
+
+// Congés du voile = agenda dédié (« Absence - Nom ») + « Absent du bureau » des agendas cochés.
+async function fetchRoadmapLeaves(force = false) {
+  const calRef = (config.congesCalId || '').trim();
+  const accounts = config.googleAccounts || [];
+  if (!accounts.length) return;
+
+  if (!force) {
+    const cached = await loadData('conges_cache');
+    if (cached && cached.v === CONGES_CACHE_V && cached.ts && Date.now() - cached.ts < 30 * 60 * 1000) {
+      roadmapConges = cached.conges || [];
+      if (roadmapPages) renderRoadmap(roadmapPages);
+      return;
+    }
+  }
+
+  const now = new Date();
+  const timeMin = addDays(mondayOf(now), -RM_BEFORE_WEEKS * 7).toISOString();
+  const timeMax = addDays(now, 183).toISOString();
+  const all = [];
+  const errors = [];
+
+  // Source 1 — agenda dédié (ID exact, sinon nom insensible casse/accents).
+  if (calRef) {
+    const norm = x => (x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const needle = norm(calRef);
+    let found = null;
+    for (const acc of accounts) {
+      for (const cal of (acc.calendars || [])) {
+        if (cal.id === calRef || norm(cal.summary).includes(needle)) { found = { acc, cal }; break; }
+      }
+      if (found) break;
+    }
+    if (found) {
+      try {
+        const token = await getValidToken(found.acc);
+        const items = await listCalEvents(found.cal.id, token, timeMin, timeMax);
+        all.push(...items.map(parseLeave).filter(Boolean));
+      } catch (e) { errors.push(e.message || 'agenda dédié'); }
+    } else {
+      notify('Agenda congés introuvable : « ' + calRef + ' »', 'err');
+    }
+  }
+
+  // Source 2 — « Absent du bureau » des agendas cochés (module « cette semaine »).
+  // On capte le type natif Google (outOfOffice) ET les événements simples titrés « Absent du bureau ».
+  for (const acc of accounts) {
+    const sels = (acc.calendars || []).filter(c => c.selected);
+    if (!sels.length) continue;
+    try {
+      const token = await getValidToken(acc);
+      for (const cal of sels) {
+        const [typed, named] = await Promise.all([
+          listCalEvents(cal.id, token, timeMin, timeMax, { eventType: 'outOfOffice' }),
+          listCalEvents(cal.id, token, timeMin, timeMax, { q: 'absent' }),
+        ]);
+        const byId = new Map();
+        [...typed, ...named].forEach(ev => { if (ev && ev.id) byId.set(ev.id, ev); });
+        byId.forEach(ev => {
+          if (ev.eventType === 'outOfOffice' || OOO_RE.test(ev.summary || '')) {
+            const c = parseOOO(ev, acc);
+            if (c) all.push(c);
+          }
+        });
+      }
+    } catch (e) { errors.push(e.message || acc.email); }
+  }
+
+  // Dédup (personne + dates) puis stockage.
+  const seen = new Set();
+  roadmapConges = all.filter(c => { const k = `${c.who}|${c.start}|${c.end}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  await saveData('conges_cache', { conges: roadmapConges, ts: Date.now(), v: CONGES_CACHE_V });
+  await saveData('config', config); // persiste jetons rafraîchis / noms de compte
+  console.info(`Congés : ${roadmapConges.length} absence(s)` + (errors.length ? ` · ${errors.length} erreur(s)` : ''));
+  if (roadmapPages) renderRoadmap(roadmapPages);
+  if (errors.length) notify('Congés : ' + errors[0], 'err');
+}
+window.fetchRoadmapLeaves = fetchRoadmapLeaves;
+
+// Rafraîchit la feuille de route : epics Notion + congés (Google), avec indicateur de chargement.
+async function refreshRoadmap() {
+  const ico = document.getElementById('roadmap-refresh-ico');
+  if (ico) ico.classList.add('spinning');
+  try {
+    await Promise.all([fetchRoadmap(true), fetchRoadmapLeaves(true)]);
+  } finally {
+    if (ico) ico.classList.remove('spinning');
+  }
+}
+window.refreshRoadmap = refreshRoadmap;
+
 // ─── To-do ───────────────────────────────────────────────────────────────────
 
 let todos = [];
@@ -810,8 +1341,15 @@ async function init() {
   const notionCached = await loadData('notion_cache');
   if (notionCached && notionCached.pages) { allTickets = notionCached.pages; renderTickets(allTickets); }
 
+  const congesCached = await loadData('conges_cache');
+  if (congesCached && congesCached.conges) roadmapConges = congesCached.conges;
+  const roadmapCached = await loadData('roadmap_cache');
+  if (roadmapCached && roadmapCached.pages) renderRoadmap(roadmapCached.pages);
+
   if (config.googleAccounts.length) fetchCalendar();
   if (config.notionToken) fetchNotion();
+  if (config.notionToken && config.roadmapDb) fetchRoadmap();
+  if (config.googleAccounts.length) fetchRoadmapLeaves();
 }
 
 init();

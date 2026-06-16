@@ -15,7 +15,9 @@
       "Bash(tar -xzf webfetch-1780655250578-vlfwg4.bin -C /tmp/focus-design2)",
       "Read(//tmp/**)",
       "Bash(node --check main.js)",
-      "Bash(rustup run *)"
+      "Bash(rustup run *)",
+      "WebSearch",
+      "WebFetch(domain:developers.payfit.io)"
     ]
   }
 }

@@ -195,8 +195,8 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 .gaccount-head{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--ink)}
 .gaccount-head .acc-dot{width:9px;height:9px;border-radius:50%;background:var(--acc,var(--ink-faint));flex:0 0 auto}
 .gaccount-head .acc-mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gaccount-head .acc-x{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;display:flex;padding:2px;transition:.15s}
-.gaccount-head .acc-x:hover{color:var(--peach-ink)}
+.gaccount-head .acc-x,.gaccount-head .acc-refresh{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;display:flex;padding:2px;transition:.15s}
+.gaccount-head .acc-x:hover,.gaccount-head .acc-refresh:hover{color:var(--peach-ink)}
 .acc-reauth{font-family:var(--mono);font-size:10px;color:var(--peach-ink);background:var(--peach-bg);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;white-space:nowrap}
 .gaccount-cals{display:flex;flex-direction:column;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
 .gaccount-cals label{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:13px;color:var(--ink-soft);cursor:pointer}
@@ -213,6 +213,75 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
 @media(max-width:1080px){.grid{grid-template-columns:1fr 1fr}.panel.span2{grid-column:span 2}.brand h1{font-size:34px}}
 @media(max-width:720px){.winbody{padding:22px 18px 26px}.grid{grid-template-columns:1fr}.panel.span2{grid-column:span 1}
   .appbar{flex-direction:column;align-items:flex-start;gap:18px}}
+
+/* ─────────────── Roadmap / Timeline (voile congés) ─────────────── */
+#roadmap-panel{margin-top:20px}
+.tl-panel{background:var(--lav-bg);gap:18px}
+.tl-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.tl-titles{display:flex;flex-direction:column;gap:9px;min-width:0}
+.tl-panel .tag{background:#fff;color:var(--lav-ink)}
+.tl-panel .icon-btn{color:var(--lav-ink)}
+.tl-panel .tag .ico{background:var(--lav);color:#fff}
+.tl-x{opacity:.5;font-weight:600}
+.tl-range{font-family:var(--mono);font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:7px}
+.tl-range i{font-size:14px}
+.tl-legend-top{margin-left:auto;align-self:center}
+
+.tl-body{background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--rule)}
+.dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+
+.tl-scroll{overflow-x:auto;overflow-y:hidden;position:relative;min-width:0}
+.tl-scroll::-webkit-scrollbar{height:9px}
+.tl-scroll::-webkit-scrollbar-thumb{background:#d8cdbb;border-radius:9px}
+.tl-plot{position:relative;background:#fff;min-width:100%}
+.tl-grid-layer{position:absolute;inset:0;z-index:1;pointer-events:none}
+.tl-gl{position:absolute;top:0;bottom:0;width:1px;background:var(--rule)}
+.tl-gl.strong{background:#e2dccf;width:1.5px}
+
+.tl-axis{position:relative;height:58px;z-index:3;border-bottom:1px solid var(--rule)}
+.tl-months{position:absolute;top:0;left:0;right:0;height:30px}
+.tl-mo{position:absolute;top:0;height:30px;display:flex;align-items:center;padding-left:11px;border-left:1px solid var(--rule)}
+.tl-mo span{font-family:var(--disp);font-size:14px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.tl-weeks{position:absolute;bottom:6px;left:0;right:0;height:18px}
+.tl-wk{position:absolute;font-family:var(--mono);font-size:10px;color:var(--ink-faint);transform:translateX(4px)}
+
+.tl-tracks{position:relative;z-index:2}
+.tl-track{height:48px;position:relative;border-bottom:1px solid var(--rule)}
+.tl-track:last-child{border-bottom:none}
+.tl-bar{position:absolute;top:9px;height:30px;border-radius:9px;display:flex;align-items:center;gap:7px;padding:0 9px 0 6px;min-width:0;overflow:hidden;box-shadow:0 4px 10px -6px rgba(60,45,35,.4);border:1px solid rgba(255,255,255,.5)}
+.tl-bar-name{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-bar-ref{font-family:var(--mono);font-size:9px;opacity:.7;white-space:nowrap}
+
+.st-peach{background:var(--peach)} .tl-bar.st-peach{color:#6e3a1e}
+.st-lav{background:var(--lav)} .tl-bar.st-lav{color:#3f3168}
+.st-mint{background:var(--mint)} .tl-bar.st-mint{color:#235640}
+.st-sky{background:var(--sky)} .tl-bar.st-sky{color:#27506e}
+.st-butter{background:var(--butter)} .tl-bar.st-butter{color:#6e5310}
+
+.tl-av{border-radius:7px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-family:var(--mono);font-weight:500;flex:0 0 auto;letter-spacing:.02em}
+.av-rose{background:linear-gradient(135deg,#d76a93,#9c3f63)}
+.av-teal{background:linear-gradient(135deg,#3fa69e,#1f6f69)}
+.av-indigo{background:linear-gradient(135deg,#6f74d6,#3f43a0)}
+.av-sand{background:linear-gradient(135deg,#b07d56,#7d5436)}
+.av-slate{background:linear-gradient(135deg,#6b7a90,#475264)}
+
+.tl-today{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--peach-ink);z-index:5;pointer-events:none}
+.tl-today-cap{position:absolute;top:5px;left:0;transform:translateX(-50%);font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--peach-ink);padding:3px 7px;border-radius:7px;white-space:nowrap}
+
+.tl-veil{position:absolute;left:0;right:0;top:58px;bottom:0;z-index:1;pointer-events:none}
+.tl-veil-caps{position:absolute;left:0;right:0;top:58px;bottom:0;z-index:6;pointer-events:none}
+.tl-band{position:absolute;top:0;bottom:0;background:rgba(44,42,50,.08);border-left:1.5px solid rgba(44,42,50,.18);border-right:1.5px solid rgba(44,42,50,.18)}
+.tl-band.band-rose{background:rgba(215,106,147,.18);border-color:#9c3f63}
+.tl-band.band-teal{background:rgba(63,166,158,.18);border-color:#1f6f69}
+.tl-band.band-indigo{background:rgba(111,116,214,.18);border-color:#3f43a0}
+.tl-band.band-sand{background:rgba(176,125,86,.18);border-color:#7d5436}
+.tl-band.band-slate{background:rgba(107,122,144,.18);border-color:#475264}
+.tl-band-cap{position:absolute;top:7px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:2px;background:#fff;border-radius:20px;padding:3px;box-shadow:0 4px 10px -5px rgba(60,45,35,.45);white-space:nowrap;pointer-events:auto;cursor:default}
+
+.tl-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:0 4px}
+.tl-legend-top{padding:0}
+.tl-leg-group{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.tl-leg{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-soft);font-weight:500}
 </style>
 </head>
 <body>
@@ -344,6 +413,25 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
         </section>
 
       </main>
+
+      <!-- Roadmap / Feuille de route -->
+      <section class="panel tl-panel scheme-pastel" id="roadmap-panel">
+        <div class="tl-head">
+          <div class="tl-titles">
+            <span class="tag"><span class="ico"><i class="ti ti-timeline" aria-hidden="true"></i></span> Timeline · Notion <span class="tl-x">×</span> Google</span>
+            <div class="p-title">Roadmap</div>
+            <div class="tl-range" id="roadmap-range"><i class="ti ti-calendar-month" aria-hidden="true"></i> —</div>
+          </div>
+          <div class="tl-legend tl-legend-top" id="roadmap-statuts"></div>
+          <button class="icon-btn" data-action="roadmap-refresh" aria-label="Rafraîchir la roadmap"><i class="ti ti-refresh" id="roadmap-refresh-ico" aria-hidden="true"></i></button>
+        </div>
+        <div id="roadmap-body">
+          <div class="empty"><div class="e-ico"><i class="ti ti-timeline" aria-hidden="true"></i></div><p>Configurez votre base Notion roadmap</p></div>
+        </div>
+        <div class="tl-legend">
+          <div class="tl-leg-group" id="roadmap-team"></div>
+        </div>
+      </section>
     </div>
 
 <!-- Settings modal -->
@@ -372,6 +460,14 @@ body{font-family:var(--sans);color:var(--ink);line-height:1.5;
     <div class="field">
       <label>Notion — Filtrer par personne assignée (nom ou ID, optionnel)</label>
       <input class="input" id="notion-assignee" placeholder="Alyssa Biot  ·  ou un ID utilisateur Notion  ·  vide = tous">
+    </div>
+    <div class="field">
+      <label>Roadmap — ID de la base Notion (epics)</label>
+      <input class="input" id="roadmap-db" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+    <div class="field">
+      <label>Roadmap — Agenda Google des congés</label>
+      <select class="input" id="conges-cal"><option value="">— Aucun —</option></select>
     </div>
     <div class="note-box">
       <i class="ti ti-lock" aria-hidden="true"></i>
