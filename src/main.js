@@ -941,11 +941,20 @@ function renderRoadmap(pages) {
 
   // Largeur d'une semaine = largeur visible / 8 → la zone tracée fait totalWeeks semaines,
   // et on positionne le scroll sur la semaine en cours (8 semaines depuis le bord gauche).
-  const scroller = body.querySelector('.tl-scroll');
-  const plot = body.querySelector('.tl-plot');
-  const weekW = (scroller.clientWidth || RM_VISIBLE_WEEKS * RM_WEEK_MIN_PX) / RM_VISIBLE_WEEKS;
-  plot.style.width = (totalWeeks * weekW) + 'px';
-  scroller.scrollLeft = RM_BEFORE_WEEKS * weekW;
+  // IMPORTANT : on mesure clientWidth APRÈS la mise en page (rAF), sinon en build le
+  // rendu est trop rapide et clientWidth vaut 0 → largeur de semaine erronée.
+  let sizeTries = 0;
+  const applySize = () => {
+    const scroller = body.querySelector('.tl-scroll');
+    const plot = body.querySelector('.tl-plot');
+    if (!scroller || !plot) return;
+    const vw = scroller.clientWidth;
+    if (!vw && sizeTries++ < 30) { requestAnimationFrame(applySize); return; } // pas encore mis en page
+    const weekW = (vw || RM_VISIBLE_WEEKS * RM_WEEK_MIN_PX) / RM_VISIBLE_WEEKS;
+    plot.style.width = (totalWeeks * weekW) + 'px';
+    scroller.scrollLeft = RM_BEFORE_WEEKS * weekW;
+  };
+  requestAnimationFrame(applySize);
 
   // Légende équipe : toute personne présente (lead de projet ou en congé), même couleur partout.
   teamEl.innerHTML = people.map(name => `<span class="tl-leg">${avatarHTML(name, personAv[name], 18)} ${esc(name.split(/\s+/)[0])}</span>`).join('');
