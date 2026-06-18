@@ -718,8 +718,8 @@ const fmtDate = d => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-d
 const RM_VISIBLE_WEEKS = 8;
 const RM_BEFORE_WEEKS = 8;
 const RM_WEEK_MIN_PX = 96; // largeur de repli si la zone n'est pas mesurable
-let roadmapPages = null;   // dernières pages rendues (re-render au resize)
-let roadmapResizeBound = false;
+let roadmapPages = null;   // dernières pages rendues (re-render quand les congés arrivent)
+let roadmapSizeObserver = null; // recalcule la largeur du timeline quand la zone visible change
 
 async function fetchRoadmap(force = false) {
   const { notionToken, roadmapDb } = config;
@@ -806,7 +806,7 @@ function mergeLeaves(list) {
 }
 
 function renderRoadmap(pages) {
-  roadmapPages = pages; // mémorisé pour re-render au resize
+  roadmapPages = pages; // mémorisé pour re-render quand les congés arrivent
   const body = document.getElementById('roadmap-body');
   const statutsEl = document.getElementById('roadmap-statuts');
   const teamEl = document.getElementById('roadmap-team');
@@ -869,8 +869,8 @@ function renderRoadmap(pages) {
   rangeEl.innerHTML = `<i class="ti ti-calendar-month" aria-hidden="true"></i> ${esc(monthLabel(WIN_START))} – ${esc(monthLabel(winLast))} ${rangeYear} · ${RM_VISIBLE_WEEKS} sem. visibles`;
 
   // Couche grille (semaines + mois forts).
-  const gridLayer = mondays.map(m => `<span class="tl-gl" style="left:${pct(m)}%"></span>`).join('')
-    + months.map(m => `<span class="tl-gl strong" style="left:${pct(m.start)}%"></span>`).join('');
+  const gridLayer = mondays.map(m => `<span class="tl-gl" data-l="${pct(m)}"></span>`).join('')
+    + months.map(m => `<span class="tl-gl strong" data-l="${pct(m.start)}"></span>`).join('');
 
   // Congés fusionnés par personne (plages qui se chevauchent, se touchent, ou ne
   // sont séparées que par des jours non travaillés → week-ends et fériés).
@@ -893,24 +893,24 @@ function renderRoadmap(pages) {
     const firstName = n => n.split(/\s+/)[0];
     if (grp.length === 1) {
       const pal = personAv[c.who] || 'slate';
-      bands.push(`<div class="tl-band band-${pal}" style="left:${left}%;width:${width}%"></div>`);
-      caps.push(`<div class="tl-band-cap" style="left:${left + width / 2}%" title="${esc(`${firstName(c.who)} · ${dates}`)}">${avatarHTML(c.who, pal, 18, false)}</div>`);
+      bands.push(`<div class="tl-band band-${pal}" data-l="${left}" data-w="${width}"></div>`);
+      caps.push(`<div class="tl-band-cap" data-l="${left + width / 2}" title="${esc(`${firstName(c.who)} · ${dates}`)}">${avatarHTML(c.who, pal, 18, false)}</div>`);
     } else {
       // Congé commun : bande en couleurs combinées (dégradé en bandes des couleurs de chacun) + tag combiné.
       const names = grp.map(g => g.who);
       const tints = names.map(n => BAND_TINT[personAv[n] || 'slate'] || BAND_TINT.slate);
       const stops = tints.map((c, i) => `${c} ${(i / tints.length * 100).toFixed(2)}% ${((i + 1) / tints.length * 100).toFixed(2)}%`).join(', ');
       const avs = names.map(n => avatarHTML(n, personAv[n] || 'slate', 18, false)).join('');
-      bands.push(`<div class="tl-band" style="left:${left}%;width:${width}%;background:linear-gradient(135deg, ${stops})"></div>`);
-      caps.push(`<div class="tl-band-cap is-multi" style="left:${left + width / 2}%" title="${esc(`${names.map(firstName).join(' & ')} · ${dates}`)}">${avs}</div>`);
+      bands.push(`<div class="tl-band" data-l="${left}" data-w="${width}" style="background:linear-gradient(135deg, ${stops})"></div>`);
+      caps.push(`<div class="tl-band-cap is-multi" data-l="${left + width / 2}" title="${esc(`${names.map(firstName).join(' & ')} · ${dates}`)}">${avs}</div>`);
     }
   });
   const veil = bands.join(''), veilCaps = caps.join('');
 
   // Axe : mois + numéros de semaine.
   const axis =
-    `<div class="tl-months">${months.map(m => `<div class="tl-mo" style="left:${pct(m.start)}%;width:${pct(m.end) - pct(m.start)}%"><span>${esc(m.label)}</span></div>`).join('')}</div>`
-    + `<div class="tl-weeks">${mondays.map(m => `<div class="tl-wk" style="left:${pct(m)}%">${m.getDate()}</div>`).join('')}</div>`;
+    `<div class="tl-months">${months.map(m => `<div class="tl-mo" data-l="${pct(m.start)}" data-w="${pct(m.end) - pct(m.start)}"><span>${esc(m.label)}</span></div>`).join('')}</div>`
+    + `<div class="tl-weeks">${mondays.map(m => `<div class="tl-wk" data-l="${pct(m)}">${m.getDate()}</div>`).join('')}</div>`;
 
   // Barres projets (tooltip natif au survol : nom complet + dates).
   const tracks = projects.map(p => {
@@ -918,13 +918,13 @@ function renderRoadmap(pages) {
     const left = Math.max(0, pct(p.start)), width = Math.max(0, Math.min(100, pct(p.end)) - left);
     const lead = p.lead ? avatarHTML(p.lead, personAv[p.lead], 18) : '';
     const tip = `${p.name}${p.ref ? ` (${p.ref})` : ''} · ${fmtDate(p.start)} → ${fmtDate(p.end)}`;
-    return `<div class="tl-track"><div class="tl-bar st-${s.pal}" style="left:${left}%;width:${width}%" title="${esc(tip)}">${lead}<span class="tl-bar-name">${esc(p.name)}</span>${p.ref ? `<span class="tl-bar-ref">${esc(p.ref)}</span>` : ''}</div></div>`;
+    return `<div class="tl-track"><div class="tl-bar st-${s.pal}" data-l="${left}" data-w="${width}" title="${esc(tip)}">${lead}<span class="tl-bar-name">${esc(p.name)}</span>${p.ref ? `<span class="tl-bar-ref">${esc(p.ref)}</span>` : ''}</div></div>`;
   }).join('');
 
   // Repère « Aujourd'hui » (masqué hors fenêtre).
   const today = new Date();
   const todayMark = (today >= WIN_START && today < WIN_END)
-    ? `<div class="tl-today" style="left:${pct(today)}%"><span class="tl-today-cap">Aujourd’hui</span></div>` : '';
+    ? `<div class="tl-today" data-l="${pct(today)}"><span class="tl-today-cap">Aujourd’hui</span></div>` : '';
 
   body.innerHTML = `<div class="tl-body">
     <div class="tl-scroll">
@@ -939,32 +939,36 @@ function renderRoadmap(pages) {
     </div>
   </div>`;
 
-  // Largeur d'une semaine = largeur visible / 8 → la zone tracée fait totalWeeks semaines,
-  // et on positionne le scroll sur la semaine en cours (8 semaines depuis le bord gauche).
-  // IMPORTANT : on mesure clientWidth APRÈS la mise en page (rAF), sinon en build le
-  // rendu est trop rapide et clientWidth vaut 0 → largeur de semaine erronée.
-  let sizeTries = 0;
-  const applySize = () => {
-    const scroller = body.querySelector('.tl-scroll');
-    const plot = body.querySelector('.tl-plot');
-    if (!scroller || !plot) return;
-    const vw = scroller.clientWidth;
-    if (!vw && sizeTries++ < 30) { requestAnimationFrame(applySize); return; } // pas encore mis en page
-    const weekW = (vw || RM_VISIBLE_WEEKS * RM_WEEK_MIN_PX) / RM_VISIBLE_WEEKS;
-    plot.style.width = (totalWeeks * weekW) + 'px';
-    scroller.scrollLeft = RM_BEFORE_WEEKS * weekW;
-  };
-  requestAnimationFrame(applySize);
+  // Positionnement en PIXELS, pas en %. Dans la WebView du build (WKWebView via le
+  // protocole d'asset), les pourcentages left/right/width des éléments en position:absolute
+  // ne se résolvent pas (largeur du bloc conteneur traitée comme indéfinie) → toutes les
+  // barres se rabattaient en flux à gauche. En `tauri dev` (servi en http) ça marchait.
+  // On calcule donc left/width en px depuis la largeur réelle de la zone visible.
+  // Chaque élément positionné porte data-l (% gauche) et, si besoin, data-w (% largeur).
+  // ResizeObserver recale au montage et à chaque changement (resize, panneau redevenu visible).
+  const scroller = body.querySelector('.tl-scroll');
+  const plot = body.querySelector('.tl-plot');
+  if (roadmapSizeObserver) roadmapSizeObserver.disconnect();
+  if (scroller && plot) {
+    let scrolled = false; // on ne cale scrollLeft qu'une fois (sinon saut pendant le défilement)
+    const applySize = () => {
+      const vw = scroller.clientWidth || RM_VISIBLE_WEEKS * RM_WEEK_MIN_PX; // repli si pas encore mesurable
+      const weekW = vw / RM_VISIBLE_WEEKS;
+      const plotW = totalWeeks * weekW;
+      plot.style.width = plotW + 'px';
+      plot.querySelectorAll('[data-l]').forEach(el => {
+        el.style.left = (parseFloat(el.dataset.l) / 100 * plotW) + 'px';
+        if (el.dataset.w !== undefined) el.style.width = (parseFloat(el.dataset.w) / 100 * plotW) + 'px';
+      });
+      if (scroller.clientWidth && !scrolled) { scroller.scrollLeft = RM_BEFORE_WEEKS * weekW; scrolled = true; }
+    };
+    roadmapSizeObserver = new ResizeObserver(applySize);
+    roadmapSizeObserver.observe(scroller);
+    applySize(); // tentative immédiate si la zone est déjà mesurable
+  }
 
   // Légende équipe : toute personne présente (lead de projet ou en congé), même couleur partout.
   teamEl.innerHTML = people.map(name => `<span class="tl-leg">${avatarHTML(name, personAv[name], 18)} ${esc(name.split(/\s+/)[0])}</span>`).join('');
-
-  // Re-render au redimensionnement (recale la largeur de semaine sur la nouvelle largeur visible).
-  if (!roadmapResizeBound) {
-    roadmapResizeBound = true;
-    let rt;
-    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (roadmapPages) renderRoadmap(roadmapPages); }, 150); });
-  }
 }
 
 window.fetchRoadmap = fetchRoadmap;

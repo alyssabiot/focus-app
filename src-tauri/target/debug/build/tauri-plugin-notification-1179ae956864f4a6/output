@@ -1,7 +1,0 @@
-cargo:rerun-if-changed=permissions
-cargo:PERMISSION_FILES_PATH=/Users/alyssa/code/focus-app/src-tauri/target/debug/build/tauri-plugin-notification-1179ae956864f4a6/out/tauri-plugin-notification-permission-files
-cargo:rerun-if-env-changed=REMOVE_UNUSED_COMMANDS
-cargo:GLOBAL_API_SCRIPT_PATH=/Users/alyssa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-notification-2.3.3/api-iife.js
-cargo:rustc-check-cfg=cfg(mobile)
-cargo:rustc-check-cfg=cfg(desktop)
-cargo:rustc-cfg=desktop
